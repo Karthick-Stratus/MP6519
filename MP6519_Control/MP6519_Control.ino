@@ -50,9 +50,9 @@ void printColumnHeader();
 void printTelemetry(float v, float i, float p);
 
 void setup() {
-  Serial.begin(115200);
+  Serial1.begin(115200);
   // Wait for serial to be ready (optional for some Pico setups)
-  // while (!Serial && millis() < 2000); 
+  // while (!Serial1 && millis() < 2000); 
 
   // Initialize Pins
   pinMode(PIN_EN, OUTPUT);
@@ -82,7 +82,7 @@ void setup() {
   
   startTime = millis();
   
-  Serial.println("\n--- MP6519 Brake Control System Initialized ---");
+  Serial1.println("\n--- MP6519 Brake Control System Initialized ---");
   printColumnHeader();
 }
 
@@ -147,9 +147,9 @@ uint16_t readRegister(uint8_t reg) {
 // --- Telemetry Reporting ---
 
 void printColumnHeader() {
-  Serial.println("--------------------------------------------------------------------------------------------------");
-  Serial.println("Voltage(V)  Current(A)  Power(W)  Duty(%)  Freq(Hz)  ENB  FT_Stat  MODE");
-  Serial.println("--------------------------------------------------------------------------------------------------");
+  Serial1.println("--------------------------------------------------------------------------------------------------");
+  Serial1.println("Voltage(V)  Current(A)  Power(W)  Duty(%)  Freq(Hz)  ENB  FT_Stat  MODE");
+  Serial1.println("--------------------------------------------------------------------------------------------------");
 }
 
 void printTelemetry(float v, float i, float p) {
@@ -162,12 +162,12 @@ void printTelemetry(float v, float i, float p) {
   float duty_pct = (dutyCycle * 100.0) / PWM_RESOLUTION;
 
   // Print values side by side
-  Serial.print(v, 2);           Serial.print(" V\t");
-  Serial.print(i, 3);           Serial.print(" A\t");
-  Serial.print(p, 2);           Serial.print(" W\t");
-  Serial.print(duty_pct, 1);    Serial.print(" %\t");
-  Serial.print(PWM_FREQUENCY);  Serial.print(" Hz\t");
-  Serial.print(enb_stat ? "HIGH" : "LOW"); Serial.print("\t");
-  Serial.print(ft_stat ? "OK" : "FAULT");  Serial.print("\t");
-  Serial.println(mode_stat ? "HIGH" : "LOW");
+  Serial1.print(v, 2);           Serial1.print(" V\t");
+  Serial1.print(i, 3);           Serial1.print(" A\t");
+  Serial1.print(p, 2);           Serial1.print(" W\t");
+  Serial1.print(duty_pct, 1);    Serial1.print(" %\t");
+  Serial1.print(PWM_FREQUENCY);  Serial1.print(" Hz\t");
+  Serial1.print(enb_stat ? "HIGH" : "LOW"); Serial1.print("\t");
+  Serial1.print(ft_stat ? "OK" : "FAULT");  Serial1.print("\t");
+  Serial1.println(mode_stat ? "HIGH" : "LOW");
 }
