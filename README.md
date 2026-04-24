@@ -14,8 +14,9 @@ This repository contains the firmware for controlling a Brake Disk using the **M
   - **Long Run Mode**: Optional continuous testing loop with 1s cooldown between cycles.
 
 ## Pin Configuration (Pico 2)
-*   **GP17** = Success Indicator (Pulse High on Peak Detection)
+*   **GP19** = INA260 Alert Pin (18V Under-Voltage detection)
 *   **GP18** = Failure Indicator (Trigger High on Fault)
+*   **GP17** = Success Indicator (Pulse High on Peak Detection)
 *   **GP16** = Reset Test Sequence Button (Input Pull-up, Active Low)
 *   **GP15** = SCL (INA260 - I2C1) - Must have 10K pull-up
 *   **GP14** = SDA (INA260 - I2C1) - Must have 10K pull-up
@@ -25,6 +26,13 @@ This repository contains the firmware for controlling a Brake Disk using the **M
 *   **GP10** = PWM - Output
 
 ---
+
+## ⚡ Power-On Reset (POR) & 18V Monitoring
+
+The system uses the **INA260 ALERT pin (GP19)** to monitor the 24V supply. 
+- **Under-Voltage Protection**: If the voltage drops below **18V**, the system immediately disables the motor driver and enters a `WAIT_POWER` state to prevent unstable operation or hardware damage.
+- **Auto-Recovery**: When the 24V supply is restored (>18V), the system automatically re-initializes the I2C bus and sensor registers, then restarts the full test sequence from the beginning.
+- **Robustness**: The firmware includes an I2C recovery mechanism and 100ms startup blanking to handle rapid power cycles (OFF-ON within 1s) and deep brownouts (down to 0V) without hanging.
 
 ## ⚠️ CRITICAL: MP6519 ENB and PWM Sequence
 
@@ -63,5 +71,5 @@ python dashboard.py
 5. **Ramp Down**: Smoothly transitions to 15% of the Peak power over 5s.
 6. **Hold**: Maintains 15% power indefinitely (or for 3s in Long Run Mode).
 7. **Long Run**: Toggle this in the GUI to repeat the test cycle automatically.
-8. **Reset**: Use the hardware button (GP16) to reset the system and wait 2 seconds before restarting.
+8. **Reset**: Use the hardware button (GP16) or wait for a Power Recycle (>18V) to restart the system.
 
