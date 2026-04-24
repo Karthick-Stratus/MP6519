@@ -9,10 +9,13 @@ This repository contains the firmware for controlling a Brake Disk using the **M
 - **Power Sensor**: INA260 (I2C)
 - **Operating Voltage**: 24VDC
 - **Brake Logic**:
-  - Initial Phase: 20 Watts (5 Seconds)
-  - Hold Phase: 10 Watts (Steady State)
+  - **PEAK Phase**: 100% Duty Cycle for 3 Seconds.
+  - **Hold Phase**: Automatically tuned to **15%** of the measured Peak Power.
+  - **Long Run Mode**: Optional continuous testing loop with 1s cooldown between cycles.
 
 ## Pin Configuration (Pico 2)
+*   **GP17** = Success Indicator (Pulse High on Peak Detection)
+*   **GP18** = Failure Indicator (Trigger High on Fault)
 *   **GP16** = Reset Test Sequence Button (Input Pull-up, Active Low)
 *   **GP15** = SCL (INA260 - I2C1) - Must have 10K pull-up
 *   **GP14** = SDA (INA260 - I2C1) - Must have 10K pull-up
@@ -36,21 +39,29 @@ To successfully power on the brake, the firmware strictly follows this sequence:
 
 ## Telemetry Format
 
-The system prints telemetry side-by-side in columns via the RPI Debugger Serial (COM12):
+The system outputs JSON telemetry at **10Hz** via Serial1 (TX=GP0, RX=GP1). This data is consumed by the Python Dashboard.
 
-`Voltage(V) | Current(A) | Power(W) | Duty(%) | Freq(Hz) | ENB | FT_Stat | MODE`
+## Dashboard GUI
 
-## Setup Instructions
+A Python-based dashboard (`dashboard.py`) is provided to visualize telemetry and control the **Long Run Test**.
 
-1. Connect the hardware according to the pin mapping table.
-2. Power the system with 24VDC.
-3. Upload the `MP6519_Control.ino` sketch using the Arduino IDE (ensure the Raspberry Pi Pico 2 board is selected).
-4. Open the Serial Monitor at **115200 Baud** to view the telemetry.
+**Requirements:**
+- Python 3.x
+- `pip install pyserial`
 
-## Operation
+**Run:**
+```bash
+python dashboard.py
+```
 
-Upon startup, the system will:
-1. Initialize the INA260 sensor and PWM output.
-2. Ramp up the Brake Disk to **20 Watts** and maintain it for 5 seconds.
-3. Automatically drop the power to **10 Watts** after the boost period.
-4. Continuously monitor for faults (FT pin).
+## Setup & Operation
+
+1. Connect hardware as per pin configuration.
+2. Upload `MP6519_Control.ino` to the Pico 2.
+3. Launch `dashboard.py` and select the correct COM port.
+4. **PEAK Detection**: The system will run at 100% duty for 3s to detect max power.
+5. **Ramp Down**: Smoothly transitions to 15% of the Peak power over 5s.
+6. **Hold**: Maintains 15% power indefinitely (or for 3s in Long Run Mode).
+7. **Long Run**: Toggle this in the GUI to repeat the test cycle automatically.
+8. **Reset**: Use the hardware button (GP16) to reset the system and wait 2 seconds before restarting.
+
