@@ -31,8 +31,8 @@ const int PIN_ALERT = 19;     // INA260 Alert Pin (Active Low on Under-Voltage)
 #define REG_CURRENT 0x01
 #define REG_VOLTAGE 0x02
 #define REG_POWER 0x03
-#define REG_MASK_ENABLE 0x05
-#define REG_ALERT_LIMIT 0x06
+#define REG_MASK_ENABLE 0x06
+#define REG_ALERT_LIMIT 0x07
 
 // Power Control Configuration
 const unsigned long BOOST_TIME_MS = 3000; // 3 seconds at 100%
