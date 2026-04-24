@@ -12,16 +12,27 @@ This repository contains the firmware for controlling a Brake Disk using the **M
   - Initial Phase: 20 Watts (5 Seconds)
   - Hold Phase: 10 Watts (Steady State)
 
-## Pin Mapping (Pico 2)
+## Pin Configuration (Pico 2)
+*   **GP16** = Reset Test Sequence Button (Input Pull-up, Active Low)
+*   **GP15** = SCL (INA260 - I2C1) - Must have 10K pull-up
+*   **GP14** = SDA (INA260 - I2C1) - Must have 10K pull-up
+*   **GP13** = FT (Fault Trigger) - Input with 10K pull-up
+*   **GP12** = EN (Enable) - Output
+*   **GP11** = MODE - Output
+*   **GP10** = PWM - Output
 
-| Pin  | Function | Device        | Notes                      |
-|------|----------|---------------|----------------------------|
-| GP15 | SCL      | INA260        | External 10K Pull-up       |
-| GP14 | SDA      | INA260        | External 10K Pull-up       |
-| GP13 | FT       | MP6519        | Fault Trigger (10K Pull-up)|
-| GP12 | EN       | MP6519        | Driver Enable              |
-| GP11 | MODE9    | MP6519        | Mode Selection             |
-| GP10 | PWM      | MP6519        | PWM Control (20kHz)        |
+---
+
+## ⚠️ CRITICAL: MP6519 ENB and PWM Sequence
+
+The MP6519 motor driver has a strict safety feature called **Switching Auto-Disable**. 
+If the PWM signal remains `LOW` while the `EN` (Enable) signal is driven `HIGH` during start-up, the device permanently enters a **Standby Mode** and will not output power.
+
+To successfully power on the brake, the firmware strictly follows this sequence:
+1.  **Initialize EN as LOW** (`digitalWrite(PIN_EN, LOW)`).
+2.  **Configure and start the PWM output** (Apply `analogWrite` with a `>0` duty cycle).
+3.  **Wait briefly** to ensure the PWM signal is stable (e.g. `delay(2)`).
+4.  **Drive EN to HIGH** (`digitalWrite(PIN_EN, HIGH)`) to enable the driver.
 
 ## Telemetry Format
 
