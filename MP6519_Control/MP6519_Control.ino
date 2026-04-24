@@ -24,6 +24,7 @@ const int PIN_RESET_BTN = 16; // Push button to restart
 const int PIN_SUCCESS = 17;   // Pulse on successful detection
 const int PIN_FAILURE = 18;   // Trigger on fault
 const int PIN_ALERT = 19;     // INA260 Alert Pin (Active Low on Under-Voltage)
+const int PIN_STATUS_LED = 9;        // Status LED
 
 // INA260 Configuration
 #define INA260_ADDR 0x40
@@ -53,6 +54,9 @@ bool isLongRunEnabled = false;
 int cycleCount = 0;
 unsigned long holdStartTime = 0;
 unsigned long cooldownStartTime = 0;
+unsigned long ledPrevTime = 0;
+int ledBrightness = 0;
+bool ledDirection = true;
 
 enum FaultState {
   FAULT_NONE,
@@ -113,11 +117,12 @@ void setup() {
 
   initINA260();
 
-  // Configure PWM
+  // Configure PWM for Driver and LED
   analogWriteFreq(PWM_FREQUENCY);
   analogWriteRange(PWM_RESOLUTION);
 
   pinMode(PIN_ALERT, INPUT_PULLUP);
+  pinMode(PIN_STATUS_LED, OUTPUT);
 
   startSequence(); 
 }
@@ -326,6 +331,38 @@ void loop() {
   
   if (currentState != STATE_FAULT) {
     analogWrite(PIN_PWM, dutyCycle);
+  }
+
+  // --- LED STATUS LOGIC ---
+  unsigned long now = millis();
+  if (currentState == STATE_PEAK) {
+    // Fast Blink (Toggle every 100ms loop)
+    digitalWrite(PIN_STATUS_LED, (now / 100) % 2);
+  } 
+  else if (currentState == STATE_HOLD) {
+    // Slow Fade (Approx 2s cycle)
+    if (now - ledPrevTime >= 20) { // Update every 20ms for smooth fade
+      ledPrevTime = now;
+      if (ledDirection) {
+        ledBrightness += 10;
+        if (ledBrightness >= PWM_RESOLUTION) ledDirection = false;
+      } else {
+        ledBrightness -= 10;
+        if (ledBrightness <= 0) ledDirection = true;
+      }
+      analogWrite(PIN_STATUS_LED, ledBrightness);
+    }
+  } 
+  else if (currentState == STATE_WAIT_POWER || currentState == STATE_COOLDOWN) {
+    // Solid HIGH (Rest Mode)
+    digitalWrite(PIN_STATUS_LED, HIGH);
+  } 
+  else if (currentState == STATE_FAULT) {
+    // Solid LOW or optionally fast-fast blink
+    digitalWrite(PIN_STATUS_LED, LOW);
+  }
+  else {
+    digitalWrite(PIN_STATUS_LED, LOW);
   }
 
   // Print 10Hz JSON telemetry
