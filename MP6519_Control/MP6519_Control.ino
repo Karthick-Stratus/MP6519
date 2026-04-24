@@ -50,9 +50,13 @@ void printColumnHeader();
 void printTelemetry(float v, float i, float p);
 
 void setup() {
+  Serial1.setTX(0);
+  Serial1.setRX(1);
   Serial1.begin(115200);
-  // Wait for serial to be ready (optional for some Pico setups)
-  // while (!Serial1 && millis() < 2000); 
+  
+  // Wait 3 seconds to allow time to open Serial Monitor after boot
+  delay(3000); 
+  Serial1.println("\n\n=== BOOTING MP6519 SYSTEM ===");
 
   // Initialize Pins
   pinMode(PIN_EN, OUTPUT);
@@ -82,11 +86,13 @@ void setup() {
   
   startTime = millis();
   
-  Serial1.println("\n--- MP6519 Brake Control System Initialized ---");
+  Serial1.println("--- MP6519 Brake Control System Initialized ---");
   printColumnHeader();
 }
 
 void loop() {
+  Serial1.println("[DEBUG] Loop started..."); // Heartbeat to check if code reaches loop
+  
   unsigned long elapsed = millis() - startTime;
   float targetPower = POWER_TARGET_BOOST;
 
