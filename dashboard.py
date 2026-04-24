@@ -8,8 +8,8 @@ import threading
 class DashboardApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("MP6519 Brake Driver Dashboard")
-        self.root.geometry("600x500")
+        self.root.title("MP6519 Brake Driver Dashboard v2.0")
+        self.root.geometry("600x600")
         self.root.configure(bg="#2c3e50")
         
         self.serial_port = None
@@ -60,18 +60,18 @@ class DashboardApp:
             ("Live Watts:", "W", " W"),
             ("Frequency:", "Freq", " Hz"),
             ("Duty Cycle:", "Duty", " %"),
-            ("Max Detected Watts:", "MaxW", " W"),
-            ("Target Hold Watts (15%):", "TgtW", " W"),
-            ("Test Cycles Done:", "Cycles", ""),
+            ("Peak Measured Power:", "MaxW", " W"),
+            ("Target Hold Power (15%):", "TgtW", " W"),
+            ("Test Cycles Completed:", "Cycles", ""),
         ]
         
         self.value_labels = {}
         
         row = 0
         for title, key, unit in labels:
-            ttk.Label(data_frame, text=title).grid(row=row, column=0, sticky=tk.W, pady=10)
+            ttk.Label(data_frame, text=title).grid(row=row, column=0, sticky=tk.W, pady=8)
             val_lbl = ttk.Label(data_frame, text="---" + unit, style='Value.TLabel')
-            val_lbl.grid(row=row, column=1, sticky=tk.E, pady=10)
+            val_lbl.grid(row=row, column=1, sticky=tk.E, pady=8)
             self.value_labels[key] = (val_lbl, unit)
             row += 1
             
@@ -83,13 +83,14 @@ class DashboardApp:
         self.lbl_state = ttk.Label(status_frame, text="DISCONNECTED", style='Value.TLabel')
         self.lbl_state.grid(row=0, column=1, sticky=tk.E, pady=5, padx=20)
         
-        ttk.Label(status_frame, text="Fault Status:").grid(row=1, column=0, sticky=tk.W, pady=5)
+        ttk.Label(status_frame, text="Active Fault:").grid(row=1, column=0, sticky=tk.W, pady=5)
         self.lbl_fault = ttk.Label(status_frame, text="NONE", style='Value.TLabel')
         self.lbl_fault.grid(row=1, column=1, sticky=tk.E, pady=5, padx=20)
 
-        ttk.Label(status_frame, text="Driver Pin (FT):").grid(row=2, column=0, sticky=tk.W, pady=5)
-        self.lbl_ft = ttk.Label(status_frame, text="OK", style='Value.TLabel')
+        ttk.Label(status_frame, text="Driver HW Pin (FT):").grid(row=2, column=0, sticky=tk.W, pady=5)
+        self.lbl_ft = ttk.Label(status_frame, text="OK (HIGH)", style='Value.TLabel', foreground="#2ecc71")
         self.lbl_ft.grid(row=2, column=1, sticky=tk.E, pady=5, padx=20)
+
 
     def refresh_ports(self):
         ports = [port.device for port in serial.tools.list_ports.comports()]
