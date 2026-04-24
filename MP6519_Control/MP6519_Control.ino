@@ -20,6 +20,7 @@ const int PIN_FT = 13;
 const int PIN_EN = 12;
 const int PIN_MODE = 11;
 const int PIN_PWM = 10;
+const int PIN_RESET_BTN = 16; // Push button to restart
 
 // INA260 Configuration
 #define INA260_ADDR 0x40
@@ -29,15 +30,25 @@ const int PIN_PWM = 10;
 #define REG_POWER 0x03
 
 // Power Control Configuration
-const unsigned long BOOST_TIME_MS = 2000; // 2 seconds
+const unsigned long BOOST_TIME_MS = 3000; // 3 seconds at 100%
+const unsigned long RAMP_TIME_MS = 5000;  // 5 seconds to ramp down
 float measuredBoostPower = 0.0;
 float targetHoldPower = 0.0;
 
 enum SystemState {
   STATE_BOOST,
-  STATE_HOLD
+  STATE_RAMP_DOWN,
+  STATE_HOLD,
+  STATE_FAULT
 };
 SystemState currentState = STATE_BOOST;
+
+enum FaultState {
+  FAULT_NONE,
+  FAULT_SHORT_CIRCUIT,
+  FAULT_OPEN_CIRCUIT
+};
+FaultState currentFault = FAULT_NONE;
 
 // PWM Settings
 const int PWM_FREQUENCY = 20000; // 20kHz
@@ -45,14 +56,15 @@ const int PWM_RESOLUTION = 1024; // 10-bit range
 int dutyCycle = PWM_RESOLUTION;  // Start at 100%
 
 unsigned long startTime = 0;
+unsigned long rampStartTime = 0;
 
 // Function Prototypes
 uint16_t readRegister(uint8_t reg);
 void writeRegister(uint8_t reg, uint16_t value);
 float getVoltage();
 float getCurrent();
-void printColumnHeader();
-void printTelemetry(float v, float i, float p);
+void printJsonTelemetry(float v, float i, float p);
+void resetSystem();
 
 void setup() {
   Serial1.setTX(0);
@@ -61,19 +73,30 @@ void setup() {
   
   // Wait 3 seconds to allow time to open Serial Monitor after boot
   delay(3000); 
-  Serial1.println("\n\n=== BOOTING MP6519 SYSTEM ===");
+  Serial1.println("{\"log\": \"=== BOOTING MP6519 SYSTEM ===\"}");
 
   // Initialize Pins
   pinMode(PIN_EN, OUTPUT);
   pinMode(PIN_MODE, OUTPUT);
   pinMode(PIN_PWM, OUTPUT);
   pinMode(PIN_FT, INPUT_PULLUP);
+  pinMode(PIN_RESET_BTN, INPUT_PULLUP); // Push button active LOW
 
-  // Set initial states
-  digitalWrite(PIN_EN, LOW);    // Keep disabled initially to prevent standby mode
+  resetSystem(); // Initializes state, ENB/PWM sequence, and timer
+}
+
+void resetSystem() {
+  currentState = STATE_BOOST;
+  currentFault = FAULT_NONE;
+  measuredBoostPower = 0.0;
+  targetHoldPower = 0.0;
+  
+  // IMPORTANT: ENB and PWM Sequence for MP6519
+  // The MP6519 enters standby if PWM is low while EN is high at startup.
+  digitalWrite(PIN_EN, LOW);    // 1. Keep disabled initially
   digitalWrite(PIN_MODE, HIGH); // Set default mode
   
-  // Setup I2C on GP14/15 (Must use Wire1 because GP14/15 map to I2C1)
+  // Setup I2C on GP14/15 (Wire1)
   Wire1.setSDA(PIN_SDA);
   Wire1.setSCL(PIN_SCL);
   Wire1.begin();
@@ -82,20 +105,25 @@ void setup() {
   analogWriteFreq(PWM_FREQUENCY);
   analogWriteRange(PWM_RESOLUTION);
   
-  // Apply initial PWM before enabling to satisfy MP6519 startup sequence
-  dutyCycle = PWM_RESOLUTION; // Start at 100% duty cycle
+  // 2. Apply initial 100% PWM before enabling EN
+  dutyCycle = PWM_RESOLUTION; 
   analogWrite(PIN_PWM, dutyCycle);
-  delay(2); // Short delay to ensure PWM is active
+  delay(2); // Wait 2ms for PWM to stabilize
   
-  digitalWrite(PIN_EN, HIGH);   // Enable the driver now that PWM is active
+  // 3. Enable the driver
+  digitalWrite(PIN_EN, HIGH);   
   
   startTime = millis();
-  
-  Serial1.println("--- MP6519 Brake Control System Initialized ---");
-  printColumnHeader();
 }
 
 void loop() {
+  // Check Hardware Reset Button
+  if (digitalRead(PIN_RESET_BTN) == LOW) {
+    resetSystem();
+    delay(200); // Debounce
+    return;
+  }
+
   unsigned long elapsed = millis() - startTime;
   
   // Read Telemetry
@@ -104,50 +132,70 @@ void loop() {
   float power = voltage * current;
 
   if (currentState == STATE_BOOST) {
-    // Keep duty cycle at 100%
-    dutyCycle = PWM_RESOLUTION;
+    dutyCycle = PWM_RESOLUTION; // Force 100%
     
-    // Track the highest power seen during the boost phase
     if (power > measuredBoostPower) {
       measuredBoostPower = power;
     }
     
-    // Check if 2 seconds have passed
-    if (elapsed >= BOOST_TIME_MS) {
-      currentState = STATE_HOLD;
-      // Target power is 10% of the measured boost power (reduced by 90%)
-      targetHoldPower = measuredBoostPower * 0.10; 
-      
-      Serial1.print("\n[INFO] Boost Phase Complete. Max Power: ");
-      Serial1.print(measuredBoostPower);
-      Serial1.print("W. Target Hold Power: ");
-      Serial1.print(targetHoldPower);
-      Serial1.println("W\n");
-      printColumnHeader();
+    // Check for Short Circuit
+    if (power > 60.0) {
+      currentFault = FAULT_SHORT_CIRCUIT;
+      currentState = STATE_FAULT;
     }
-  } else if (currentState == STATE_HOLD) {
-    // Tune duty cycle to reach and maintain targetHoldPower
-    float error = power - targetHoldPower;
     
+    // Check phase completion
+    if (elapsed >= BOOST_TIME_MS && currentState != STATE_FAULT) {
+      if (measuredBoostPower < 0.5) {
+        currentFault = FAULT_OPEN_CIRCUIT;
+        currentState = STATE_FAULT;
+      } else {
+        currentState = STATE_RAMP_DOWN;
+        rampStartTime = millis();
+        targetHoldPower = measuredBoostPower * 0.10; // 10% of boost
+      }
+    }
+  } 
+  else if (currentState == STATE_RAMP_DOWN) {
+    // Slowly reduce over 5 seconds (50 loops at 10Hz)
+    // Max drop is ~1024, so dropping ~20 per loop takes 5 seconds
+    if (power > targetHoldPower) {
+      dutyCycle -= 20; 
+    } else if (power < targetHoldPower - 0.5) {
+      dutyCycle += 5;
+    }
+    
+    if (millis() - rampStartTime >= RAMP_TIME_MS) {
+      currentState = STATE_HOLD;
+    }
+  }
+  else if (currentState == STATE_HOLD) {
+    // Maintain targetHoldPower
+    float error = power - targetHoldPower;
     if (power < targetHoldPower - 0.2) {
-      // Increase duty cycle (faster response if error is large)
       dutyCycle += max(1, (int)(abs(error) * 2));
     } else if (power > targetHoldPower + 0.2) {
-      // Decrease duty cycle
       dutyCycle -= max(1, (int)(abs(error) * 2));
     }
-    
-    // Constrain duty cycle to valid bounds
-    if (dutyCycle > PWM_RESOLUTION) dutyCycle = PWM_RESOLUTION;
-    if (dutyCycle < 0) dutyCycle = 0;
+  }
+  else if (currentState == STATE_FAULT) {
+    // Turn off power in fault condition
+    dutyCycle = 0;
+    digitalWrite(PIN_EN, LOW);
   }
 
-  analogWrite(PIN_PWM, dutyCycle);
+  // Constrain and apply duty cycle
+  if (dutyCycle > PWM_RESOLUTION) dutyCycle = PWM_RESOLUTION;
+  if (dutyCycle < 0) dutyCycle = 0;
+  
+  if (currentState != STATE_FAULT) {
+    analogWrite(PIN_PWM, dutyCycle);
+  }
 
-  // Print side-by-side telemetry
-  printTelemetry(voltage, current, power);
+  // Print 10Hz JSON telemetry
+  printJsonTelemetry(voltage, current, power);
 
-  delay(200); // Sample rate ~5Hz
+  delay(100); // 10Hz Sample Rate
 }
 
 // --- Sensor Interface ---
@@ -177,28 +225,32 @@ uint16_t readRegister(uint8_t reg) {
 
 // --- Telemetry Reporting ---
 
-void printColumnHeader() {
-  Serial1.println("--------------------------------------------------------------------------------------------------");
-  Serial1.println("Voltage(V)  Current(A)  Power(W)  Duty(%)  Freq(Hz)  ENB  FT_Stat  MODE");
-  Serial1.println("--------------------------------------------------------------------------------------------------");
-}
-
-void printTelemetry(float v, float i, float p) {
-  // Use fixed width for columns
-  char buffer[128];
-  
+void printJsonTelemetry(float v, float i, float p) {
   int ft_stat = digitalRead(PIN_FT);
-  int enb_stat = digitalRead(PIN_EN);
-  int mode_stat = digitalRead(PIN_MODE);
   float duty_pct = (dutyCycle * 100.0) / PWM_RESOLUTION;
+  
+  String stateStr = "";
+  if (currentState == STATE_BOOST) stateStr = "BOOST";
+  else if (currentState == STATE_RAMP_DOWN) stateStr = "RAMP_DOWN";
+  else if (currentState == STATE_HOLD) stateStr = "HOLD";
+  else if (currentState == STATE_FAULT) stateStr = "FAULT";
 
-  // Print values side by side
-  Serial1.print(v, 2);           Serial1.print(" V\t");
-  Serial1.print(i, 3);           Serial1.print(" A\t");
-  Serial1.print(p, 2);           Serial1.print(" W\t");
-  Serial1.print(duty_pct, 1);    Serial1.print(" %\t");
-  Serial1.print(PWM_FREQUENCY);  Serial1.print(" Hz\t");
-  Serial1.print(enb_stat ? "HIGH" : "LOW"); Serial1.print("\t");
-  Serial1.print(ft_stat ? "OK" : "FAULT");  Serial1.print("\t");
-  Serial1.println(mode_stat ? "HIGH" : "LOW");
+  String faultStr = "NONE";
+  if (currentFault == FAULT_SHORT_CIRCUIT) faultStr = "SHORT_CIRCUIT";
+  else if (currentFault == FAULT_OPEN_CIRCUIT) faultStr = "OPEN_CIRCUIT";
+
+  // Build JSON String
+  Serial1.print("{\"V\":"); Serial1.print(v, 2);
+  Serial1.print(",\"I\":"); Serial1.print(i, 3);
+  Serial1.print(",\"W\":"); Serial1.print(p, 2);
+  Serial1.print(",\"Duty\":"); Serial1.print(duty_pct, 1);
+  Serial1.print(",\"Freq\":"); Serial1.print(PWM_FREQUENCY);
+  Serial1.print(",\"MaxW\":"); Serial1.print(measuredBoostPower, 2);
+  Serial1.print(",\"TgtW\":"); Serial1.print(targetHoldPower, 2);
+  Serial1.print(",\"State\":\""); Serial1.print(stateStr);
+  Serial1.print("\",\"Fault\":\""); Serial1.print(faultStr);
+  Serial1.print("\",\"FT_Pin\":"); Serial1.print(ft_stat);
+  Serial1.println("}");
 }
+
+
