@@ -61,7 +61,7 @@ void setup() {
   pinMode(PIN_FT, INPUT_PULLUP);
 
   // Set initial states
-  digitalWrite(PIN_EN, HIGH);   // Enable MP6519
+  digitalWrite(PIN_EN, LOW);    // Keep disabled initially to prevent standby mode
   digitalWrite(PIN_MODE, HIGH); // Set default mode
   
   // Setup I2C on GP14/15
@@ -72,6 +72,13 @@ void setup() {
   // Configure PWM
   analogWriteFreq(PWM_FREQUENCY);
   analogWriteRange(PWM_RESOLUTION);
+  
+  // Apply initial PWM before enabling to satisfy MP6519 startup sequence
+  dutyCycle = PWM_RESOLUTION / 2; // Start at 50% duty cycle
+  analogWrite(PIN_PWM, dutyCycle);
+  delay(2); // Short delay to ensure PWM is active
+  
+  digitalWrite(PIN_EN, HIGH);   // Enable the driver now that PWM is active
   
   startTime = millis();
   
