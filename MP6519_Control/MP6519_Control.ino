@@ -28,18 +28,23 @@ const int PIN_PWM = 10;
 #define REG_VOLTAGE 0x02
 #define REG_POWER 0x03
 
-// Power Control Constants
-const float POWER_TARGET_BOOST = 20.0; // Watts
-const float POWER_TARGET_HOLD = 10.0;  // Watts
-const unsigned long BOOST_TIME_MS = 5000; // 5 seconds
+// Power Control Configuration
+const unsigned long BOOST_TIME_MS = 2000; // 2 seconds
+float measuredBoostPower = 0.0;
+float targetHoldPower = 0.0;
+
+enum SystemState {
+  STATE_BOOST,
+  STATE_HOLD
+};
+SystemState currentState = STATE_BOOST;
 
 // PWM Settings
 const int PWM_FREQUENCY = 20000; // 20kHz
 const int PWM_RESOLUTION = 1024; // 10-bit range
-int dutyCycle = 0;
+int dutyCycle = PWM_RESOLUTION;  // Start at 100%
 
 unsigned long startTime = 0;
-bool isBoostComplete = false;
 
 // Function Prototypes
 uint16_t readRegister(uint8_t reg);
@@ -78,7 +83,7 @@ void setup() {
   analogWriteRange(PWM_RESOLUTION);
   
   // Apply initial PWM before enabling to satisfy MP6519 startup sequence
-  dutyCycle = PWM_RESOLUTION / 2; // Start at 50% duty cycle
+  dutyCycle = PWM_RESOLUTION; // Start at 100% duty cycle
   analogWrite(PIN_PWM, dutyCycle);
   delay(2); // Short delay to ensure PWM is active
   
@@ -91,30 +96,50 @@ void setup() {
 }
 
 void loop() {
-  Serial1.println("[DEBUG] Loop started..."); // Heartbeat to check if code reaches loop
-  
   unsigned long elapsed = millis() - startTime;
-  float targetPower = POWER_TARGET_BOOST;
-
-  if (elapsed >= BOOST_TIME_MS) {
-    targetPower = POWER_TARGET_HOLD;
-    if (!isBoostComplete) {
-      isBoostComplete = true;
-    }
-  }
-
+  
   // Read Telemetry
   float voltage = getVoltage();
   float current = getCurrent();
   float power = voltage * current;
 
-  // Simple feedback loop to maintain power
-  // Note: For a fixed resistance Brake Disk, we could pre-calculate duty,
-  // but this ensures consistency if the 24V supply varies.
-  if (power < targetPower - 0.2) {
-    if (dutyCycle < PWM_RESOLUTION) dutyCycle++;
-  } else if (power > targetPower + 0.2) {
-    if (dutyCycle > 0) dutyCycle--;
+  if (currentState == STATE_BOOST) {
+    // Keep duty cycle at 100%
+    dutyCycle = PWM_RESOLUTION;
+    
+    // Track the highest power seen during the boost phase
+    if (power > measuredBoostPower) {
+      measuredBoostPower = power;
+    }
+    
+    // Check if 2 seconds have passed
+    if (elapsed >= BOOST_TIME_MS) {
+      currentState = STATE_HOLD;
+      // Target power is 10% of the measured boost power (reduced by 90%)
+      targetHoldPower = measuredBoostPower * 0.10; 
+      
+      Serial1.print("\n[INFO] Boost Phase Complete. Max Power: ");
+      Serial1.print(measuredBoostPower);
+      Serial1.print("W. Target Hold Power: ");
+      Serial1.print(targetHoldPower);
+      Serial1.println("W\n");
+      printColumnHeader();
+    }
+  } else if (currentState == STATE_HOLD) {
+    // Tune duty cycle to reach and maintain targetHoldPower
+    float error = power - targetHoldPower;
+    
+    if (power < targetHoldPower - 0.2) {
+      // Increase duty cycle (faster response if error is large)
+      dutyCycle += max(1, (int)(abs(error) * 2));
+    } else if (power > targetHoldPower + 0.2) {
+      // Decrease duty cycle
+      dutyCycle -= max(1, (int)(abs(error) * 2));
+    }
+    
+    // Constrain duty cycle to valid bounds
+    if (dutyCycle > PWM_RESOLUTION) dutyCycle = PWM_RESOLUTION;
+    if (dutyCycle < 0) dutyCycle = 0;
   }
 
   analogWrite(PIN_PWM, dutyCycle);
