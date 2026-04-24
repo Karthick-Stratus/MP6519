@@ -68,10 +68,10 @@ void setup() {
   digitalWrite(PIN_EN, LOW);    // Keep disabled initially to prevent standby mode
   digitalWrite(PIN_MODE, HIGH); // Set default mode
   
-  // Setup I2C on GP14/15
-  Wire.setSDA(PIN_SDA);
-  Wire.setSCL(PIN_SCL);
-  Wire.begin();
+  // Setup I2C on GP14/15 (Must use Wire1 because GP14/15 map to I2C1)
+  Wire1.setSDA(PIN_SDA);
+  Wire1.setSCL(PIN_SCL);
+  Wire1.begin();
 
   // Configure PWM
   analogWriteFreq(PWM_FREQUENCY);
@@ -138,15 +138,15 @@ float getCurrent() {
 }
 
 uint16_t readRegister(uint8_t reg) {
-  Wire.beginTransmission(INA260_ADDR);
-  Wire.write(reg);
-  if (Wire.endTransmission() != 0) return 0;
+  Wire1.beginTransmission(INA260_ADDR);
+  Wire1.write(reg);
+  if (Wire1.endTransmission() != 0) return 0;
   
-  Wire.requestFrom((uint8_t)INA260_ADDR, (uint8_t)2);
-  if (Wire.available() < 2) return 0;
+  Wire1.requestFrom((uint8_t)INA260_ADDR, (uint8_t)2);
+  if (Wire1.available() < 2) return 0;
   
-  uint16_t value = Wire.read() << 8;
-  value |= Wire.read();
+  uint16_t value = Wire1.read() << 8;
+  value |= Wire1.read();
   return value;
 }
 
