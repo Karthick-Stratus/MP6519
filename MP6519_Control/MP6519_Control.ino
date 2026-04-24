@@ -340,18 +340,17 @@ void loop() {
     digitalWrite(PIN_STATUS_LED, (now / 100) % 2);
   } 
   else if (currentState == STATE_HOLD) {
-    // Faster Fade (500ms up, 500ms down)
-    // 100ms loop delay means 5 steps to complete 500ms
+    // Faster Fade (500ms up, 500ms down) between 100% and 10% brightness
     if (ledDirection) {
-      ledBrightness += 205; 
+      ledBrightness += 184; 
       if (ledBrightness >= PWM_RESOLUTION) {
         ledBrightness = PWM_RESOLUTION;
         ledDirection = false;
       }
     } else {
-      ledBrightness -= 205;
-      if (ledBrightness <= 0) {
-        ledBrightness = 0;
+      ledBrightness -= 184;
+      if (ledBrightness <= 102) { // 10% brightness limit
+        ledBrightness = 102;
         ledDirection = true;
       }
     }
