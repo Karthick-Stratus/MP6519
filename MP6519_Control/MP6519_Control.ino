@@ -340,18 +340,22 @@ void loop() {
     digitalWrite(PIN_STATUS_LED, (now / 100) % 2);
   } 
   else if (currentState == STATE_HOLD) {
-    // Slow Fade (Approx 2s cycle)
-    if (now - ledPrevTime >= 20) { // Update every 20ms for smooth fade
-      ledPrevTime = now;
-      if (ledDirection) {
-        ledBrightness += 10;
-        if (ledBrightness >= PWM_RESOLUTION) ledDirection = false;
-      } else {
-        ledBrightness -= 10;
-        if (ledBrightness <= 0) ledDirection = true;
+    // Faster Fade (500ms up, 500ms down)
+    // 100ms loop delay means 5 steps to complete 500ms
+    if (ledDirection) {
+      ledBrightness += 205; 
+      if (ledBrightness >= PWM_RESOLUTION) {
+        ledBrightness = PWM_RESOLUTION;
+        ledDirection = false;
       }
-      analogWrite(PIN_STATUS_LED, ledBrightness);
+    } else {
+      ledBrightness -= 205;
+      if (ledBrightness <= 0) {
+        ledBrightness = 0;
+        ledDirection = true;
+      }
     }
+    analogWrite(PIN_STATUS_LED, ledBrightness);
   } 
   else if (currentState == STATE_WAIT_POWER || currentState == STATE_COOLDOWN) {
     // Solid HIGH (Rest Mode)
