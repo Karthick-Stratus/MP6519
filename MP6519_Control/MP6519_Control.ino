@@ -198,7 +198,6 @@ void loop() {
   float voltage = getVoltage();
   float current = getCurrent();
   float power = voltage * current;
-  int ft_stat = digitalRead(PIN_FT);
   int alert_stat = digitalRead(PIN_ALERT);
 
   // --- POWER MONITORING (INA260 ALERT) ---
@@ -223,9 +222,12 @@ void loop() {
   }
 
   // Monitor Hardware Fault Pin (FT goes LOW on OCP, OTP, etc.)
-  if (ft_stat == LOW && currentState != STATE_FAULT && currentState != STATE_WAIT_POWER) {
-    currentFault = FAULT_HARDWARE;
-    currentState = STATE_FAULT;
+  // Wait 100ms after startup before checking FT to allow MP6519 to clear any startup transients
+  if (digitalRead(PIN_FT) == LOW && currentState != STATE_FAULT && currentState != STATE_WAIT_POWER) {
+    if (elapsed > 100) {
+      currentFault = FAULT_HARDWARE;
+      currentState = STATE_FAULT;
+    }
   }
 
   if (currentState == STATE_WAIT_POWER) {
