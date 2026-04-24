@@ -41,6 +41,10 @@ class DashboardApp:
         self.connect_btn.pack(side=tk.LEFT, padx=5)
         
         ttk.Button(header_frame, text="Refresh Ports", command=self.refresh_ports).pack(side=tk.LEFT, padx=5)
+
+        self.long_run_var = tk.BooleanVar(value=False)
+        self.long_run_check = ttk.Checkbutton(header_frame, text="Long Run Test", variable=self.long_run_var, command=self.send_long_run_cmd)
+        self.long_run_check.pack(side=tk.LEFT, padx=20)
         
         # Data Frame
         data_frame = ttk.Frame(self.root)
@@ -57,7 +61,8 @@ class DashboardApp:
             ("Frequency:", "Freq", " Hz"),
             ("Duty Cycle:", "Duty", " %"),
             ("Max Detected Watts:", "MaxW", " W"),
-            ("Target Hold Watts (10%):", "TgtW", " W"),
+            ("Target Hold Watts (15%):", "TgtW", " W"),
+            ("Test Cycles Done:", "Cycles", ""),
         ]
         
         self.value_labels = {}
@@ -107,6 +112,16 @@ class DashboardApp:
                 except Exception as e:
                     print(f"Error opening port: {e}")
                     
+    def send_long_run_cmd(self):
+        if self.is_reading and self.serial_port and self.serial_port.is_open:
+            enable = self.long_run_var.get()
+            cmd = json.dumps({"cmd": "LONG_RUN", "enable": enable}) + "\n"
+            try:
+                self.serial_port.write(cmd.encode('utf-8'))
+                print(f"Sent: {cmd.strip()}")
+            except Exception as e:
+                print(f"Error sending command: {e}")
+
     def read_serial(self):
         while self.is_reading and self.serial_port and self.serial_port.is_open:
             try:
@@ -128,6 +143,7 @@ class DashboardApp:
             color = "#2ecc71" if state != "FAULT" else "#e74c3c"
             if state == "PEAK": color = "#e67e22"
             elif state == "RAMP_DOWN": color = "#3498db"
+            elif state == "COOLDOWN": color = "#95a5a6"
             self.lbl_state.config(text=state, foreground=color)
             
         if "Fault" in data:

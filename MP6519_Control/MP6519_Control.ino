@@ -21,6 +21,8 @@ const int PIN_EN = 12;
 const int PIN_MODE = 11;
 const int PIN_PWM = 10;
 const int PIN_RESET_BTN = 16; // Push button to restart
+const int PIN_SUCCESS = 17;   // Pulse on successful detection
+const int PIN_FAILURE = 18;   // Trigger on fault
 
 // INA260 Configuration
 #define INA260_ADDR 0x40
@@ -39,9 +41,14 @@ enum SystemState {
   STATE_PEAK,
   STATE_RAMP_DOWN,
   STATE_HOLD,
+  STATE_COOLDOWN,
   STATE_FAULT
 };
 SystemState currentState = STATE_PEAK;
+bool isLongRunEnabled = false;
+int cycleCount = 0;
+unsigned long holdStartTime = 0;
+unsigned long cooldownStartTime = 0;
 
 enum FaultState {
   FAULT_NONE,
@@ -81,6 +88,10 @@ void setup() {
   pinMode(PIN_PWM, OUTPUT);
   pinMode(PIN_FT, INPUT_PULLUP);
   pinMode(PIN_RESET_BTN, INPUT_PULLUP); // Push button active LOW
+  pinMode(PIN_SUCCESS, OUTPUT);
+  pinMode(PIN_FAILURE, OUTPUT);
+  digitalWrite(PIN_SUCCESS, LOW);
+  digitalWrite(PIN_FAILURE, LOW);
 
   // Hardware initially OFF
   digitalWrite(PIN_EN, LOW);    
@@ -105,6 +116,8 @@ void startSequence() {
   currentFault = FAULT_NONE;
   measuredBoostPower = 0.0;
   targetHoldPower = 0.0;
+  digitalWrite(PIN_SUCCESS, LOW);
+  digitalWrite(PIN_FAILURE, LOW);
   
   // IMPORTANT: ENB and PWM Sequence for MP6519
   // 1. Apply initial 100% PWM before enabling EN
@@ -131,6 +144,9 @@ void loop() {
     currentFault = FAULT_NONE;
     measuredBoostPower = 0.0;
     targetHoldPower = 0.0;
+    cycleCount = 0;
+    digitalWrite(PIN_SUCCESS, LOW);
+    digitalWrite(PIN_FAILURE, LOW);
     
     // Send zeroed JSON to update UI immediately
     printJsonTelemetry(0.0, 0.0, 0.0);
@@ -144,6 +160,16 @@ void loop() {
     
     startSequence();
     return;
+  }
+
+  // Handle Serial Commands (JSON)
+  if (Serial1.available()) {
+    String input = Serial1.readStringUntil('\n');
+    if (input.length() > 0) {
+      if (input.indexOf("\"cmd\":\"LONG_RUN\"") != -1) {
+        isLongRunEnabled = (input.indexOf("\"enable\":true") != -1);
+      }
+    }
   }
 
   unsigned long elapsed = millis() - startTime;
@@ -175,6 +201,11 @@ void loop() {
         currentState = STATE_RAMP_DOWN;
         rampStartTime = millis();
         targetHoldPower = measuredBoostPower * 0.15; // 15% of peak
+        
+        // Pulse GP17 Success
+        digitalWrite(PIN_SUCCESS, HIGH);
+        delay(10); 
+        digitalWrite(PIN_SUCCESS, LOW);
       }
     }
   } 
@@ -189,6 +220,7 @@ void loop() {
     
     if (millis() - rampStartTime >= RAMP_TIME_MS) {
       currentState = STATE_HOLD;
+      holdStartTime = millis();
     }
   }
   else if (currentState == STATE_HOLD) {
@@ -199,11 +231,31 @@ void loop() {
     } else if (power > targetHoldPower + 0.2) {
       dutyCycle -= max(1, (int)(abs(error) * 2));
     }
+
+    // Check if Long Run is enabled and 3s hold is complete
+    if (isLongRunEnabled && (millis() - holdStartTime >= 3000)) {
+      currentState = STATE_COOLDOWN;
+      cooldownStartTime = millis();
+      cycleCount++;
+    }
+  }
+  else if (currentState == STATE_COOLDOWN) {
+    // Disable output for 1 second
+    digitalWrite(PIN_EN, LOW);
+    dutyCycle = 0;
+    analogWrite(PIN_PWM, 0);
+
+    if (millis() - cooldownStartTime >= 1000) {
+      startSequence(); // Repeat cycle
+    }
   }
   else if (currentState == STATE_FAULT) {
     // Turn off power in fault condition
     dutyCycle = 0;
     digitalWrite(PIN_EN, LOW);
+    
+    // Pulse GP18 Failure
+    digitalWrite(PIN_FAILURE, HIGH);
   }
 
   // Constrain and apply duty cycle
@@ -255,6 +307,7 @@ void printJsonTelemetry(float v, float i, float p) {
   if (currentState == STATE_PEAK) stateStr = "PEAK";
   else if (currentState == STATE_RAMP_DOWN) stateStr = "RAMP_DOWN";
   else if (currentState == STATE_HOLD) stateStr = "HOLD";
+  else if (currentState == STATE_COOLDOWN) stateStr = "COOLDOWN";
   else if (currentState == STATE_FAULT) stateStr = "FAULT";
 
   String faultStr = "NONE";
@@ -269,9 +322,11 @@ void printJsonTelemetry(float v, float i, float p) {
   Serial1.print(",\"Freq\":"); Serial1.print(PWM_FREQUENCY);
   Serial1.print(",\"MaxW\":"); Serial1.print(measuredBoostPower, 2);
   Serial1.print(",\"TgtW\":"); Serial1.print(targetHoldPower, 2);
+  Serial1.print(",\"Cycles\":"); Serial1.print(cycleCount);
   Serial1.print(",\"State\":\""); Serial1.print(stateStr);
   Serial1.print("\",\"Fault\":\""); Serial1.print(faultStr);
-  Serial1.print("\",\"FT_Pin\":"); Serial1.print(ft_stat);
+  Serial1.print("\",\"LongRun\":"); Serial1.print(isLongRunEnabled ? "true" : "false");
+  Serial1.print(",\"FT_Pin\":"); Serial1.print(ft_stat);
   Serial1.println("}");
 }
 
