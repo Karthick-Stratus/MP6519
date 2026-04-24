@@ -87,6 +87,10 @@ class DashboardApp:
         self.lbl_fault = ttk.Label(status_frame, text="NONE", style='Value.TLabel')
         self.lbl_fault.grid(row=1, column=1, sticky=tk.E, pady=5, padx=20)
 
+        ttk.Label(status_frame, text="Driver Pin (FT):").grid(row=2, column=0, sticky=tk.W, pady=5)
+        self.lbl_ft = ttk.Label(status_frame, text="OK", style='Value.TLabel')
+        self.lbl_ft.grid(row=2, column=1, sticky=tk.E, pady=5, padx=20)
+
     def refresh_ports(self):
         ports = [port.device for port in serial.tools.list_ports.comports()]
         self.port_combo['values'] = ports
@@ -150,6 +154,12 @@ class DashboardApp:
             fault = data["Fault"]
             color = "#e74c3c" if fault != "NONE" else "#2ecc71"
             self.lbl_fault.config(text=fault, foreground=color)
+
+        if "FT_Pin" in data:
+            ft = data["FT_Pin"]
+            text = "OK (HIGH)" if ft == 1 else "FAULT (LOW)"
+            color = "#2ecc71" if ft == 1 else "#e74c3c"
+            self.lbl_ft.config(text=text, foreground=color)
 
 if __name__ == "__main__":
     root = tk.Tk()

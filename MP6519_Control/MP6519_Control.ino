@@ -53,7 +53,8 @@ unsigned long cooldownStartTime = 0;
 enum FaultState {
   FAULT_NONE,
   FAULT_SHORT_CIRCUIT,
-  FAULT_OPEN_CIRCUIT
+  FAULT_OPEN_CIRCUIT,
+  FAULT_HARDWARE // New: Triggered by FT pin
 };
 FaultState currentFault = FAULT_NONE;
 
@@ -178,6 +179,13 @@ void loop() {
   float voltage = getVoltage();
   float current = getCurrent();
   float power = voltage * current;
+  int ft_stat = digitalRead(PIN_FT);
+
+  // Monitor Hardware Fault Pin (FT goes LOW on OCP, OTP, etc.)
+  if (ft_stat == LOW && currentState != STATE_FAULT) {
+    currentFault = FAULT_HARDWARE;
+    currentState = STATE_FAULT;
+  }
 
   if (currentState == STATE_PEAK) {
     dutyCycle = PWM_RESOLUTION; // Force 100%
@@ -313,6 +321,7 @@ void printJsonTelemetry(float v, float i, float p) {
   String faultStr = "NONE";
   if (currentFault == FAULT_SHORT_CIRCUIT) faultStr = "SHORT_CIRCUIT";
   else if (currentFault == FAULT_OPEN_CIRCUIT) faultStr = "OPEN_CIRCUIT";
+  else if (currentFault == FAULT_HARDWARE) faultStr = "DRIVER_HARDWARE_FAULT";
 
   // Build JSON String
   Serial1.print("{\"V\":"); Serial1.print(v, 2);
