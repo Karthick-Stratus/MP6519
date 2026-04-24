@@ -23,6 +23,7 @@ const int PIN_PWM = 10;
 const int PIN_RESET_BTN = 16; // Push button to restart
 const int PIN_SUCCESS = 17;   // Pulse on successful detection
 const int PIN_FAILURE = 18;   // Trigger on fault
+const int PIN_ALERT = 19;     // INA260 Alert Pin (Active Low on Under-Voltage)
 
 // INA260 Configuration
 #define INA260_ADDR 0x40
@@ -30,6 +31,8 @@ const int PIN_FAILURE = 18;   // Trigger on fault
 #define REG_CURRENT 0x01
 #define REG_VOLTAGE 0x02
 #define REG_POWER 0x03
+#define REG_MASK_ENABLE 0x05
+#define REG_ALERT_LIMIT 0x06
 
 // Power Control Configuration
 const unsigned long BOOST_TIME_MS = 3000; // 3 seconds at 100%
@@ -38,13 +41,14 @@ float measuredBoostPower = 0.0;
 float targetHoldPower = 0.0;
 
 enum SystemState {
+  STATE_WAIT_POWER,
   STATE_PEAK,
   STATE_RAMP_DOWN,
   STATE_HOLD,
   STATE_COOLDOWN,
   STATE_FAULT
 };
-SystemState currentState = STATE_PEAK;
+SystemState currentState = STATE_WAIT_POWER;
 bool isLongRunEnabled = false;
 int cycleCount = 0;
 unsigned long holdStartTime = 0;
@@ -105,9 +109,17 @@ void setup() {
   Wire1.setSCL(PIN_SCL);
   Wire1.begin();
 
+  // Configure INA260 Alert for Under-Voltage < 18V
+  // 18V / 1.25mV/LSB = 14400 (0x3840)
+  writeRegister(REG_ALERT_LIMIT, 0x3840);
+  // Enable Bus Under-Voltage Limit (Bit 12) in Transparent Mode (Active Low)
+  writeRegister(REG_MASK_ENABLE, 0x1000);
+
   // Configure PWM
   analogWriteFreq(PWM_FREQUENCY);
   analogWriteRange(PWM_RESOLUTION);
+
+  pinMode(PIN_ALERT, INPUT_PULLUP);
 
   startSequence(); 
 }
@@ -180,14 +192,38 @@ void loop() {
   float current = getCurrent();
   float power = voltage * current;
   int ft_stat = digitalRead(PIN_FT);
+  int alert_stat = digitalRead(PIN_ALERT);
+
+  // --- POWER MONITORING (INA260 ALERT) ---
+  // If ALERT goes LOW, it means voltage is < 18V (Power disconnected or sagging heavily)
+  if (alert_stat == LOW) {
+    if (currentState != STATE_WAIT_POWER) {
+      // Immediately shut down
+      digitalWrite(PIN_EN, LOW);
+      dutyCycle = 0;
+      analogWrite(PIN_PWM, 0);
+      currentState = STATE_WAIT_POWER;
+      Serial1.println("{\"log\": \"POWER LOSS DETECTED (<18V)! Halting operations.\"}");
+    }
+  } else if (currentState == STATE_WAIT_POWER && alert_stat == HIGH) {
+    // Power restored. Wait briefly for stability then start.
+    delay(50); // 50ms stabilization
+    if (digitalRead(PIN_ALERT) == HIGH) {
+      Serial1.println("{\"log\": \"POWER RESTORED (>18V)! Starting sequence.\"}");
+      startSequence();
+    }
+  }
 
   // Monitor Hardware Fault Pin (FT goes LOW on OCP, OTP, etc.)
-  if (ft_stat == LOW && currentState != STATE_FAULT) {
+  if (ft_stat == LOW && currentState != STATE_FAULT && currentState != STATE_WAIT_POWER) {
     currentFault = FAULT_HARDWARE;
     currentState = STATE_FAULT;
   }
 
-  if (currentState == STATE_PEAK) {
+  if (currentState == STATE_WAIT_POWER) {
+    // Do nothing, waiting for power
+  }
+  else if (currentState == STATE_PEAK) {
     dutyCycle = PWM_RESOLUTION; // Force 100%
     
     if (power > measuredBoostPower) {
@@ -305,14 +341,24 @@ uint16_t readRegister(uint8_t reg) {
   return value;
 }
 
+void writeRegister(uint8_t reg, uint16_t value) {
+  Wire1.beginTransmission(INA260_ADDR);
+  Wire1.write(reg);
+  Wire1.write(value >> 8);
+  Wire1.write(value & 0xFF);
+  Wire1.endTransmission();
+}
+
 // --- Telemetry Reporting ---
 
 void printJsonTelemetry(float v, float i, float p) {
   int ft_stat = digitalRead(PIN_FT);
+  int alert_stat = digitalRead(PIN_ALERT);
   float duty_pct = (dutyCycle * 100.0) / PWM_RESOLUTION;
   
   String stateStr = "";
-  if (currentState == STATE_PEAK) stateStr = "PEAK";
+  if (currentState == STATE_WAIT_POWER) stateStr = "WAIT_POWER";
+  else if (currentState == STATE_PEAK) stateStr = "PEAK";
   else if (currentState == STATE_RAMP_DOWN) stateStr = "RAMP_DOWN";
   else if (currentState == STATE_HOLD) stateStr = "HOLD";
   else if (currentState == STATE_COOLDOWN) stateStr = "COOLDOWN";
@@ -336,6 +382,7 @@ void printJsonTelemetry(float v, float i, float p) {
   Serial1.print("\",\"Fault\":\""); Serial1.print(faultStr);
   Serial1.print("\",\"LongRun\":"); Serial1.print(isLongRunEnabled ? "true" : "false");
   Serial1.print(",\"FT_Pin\":"); Serial1.print(ft_stat);
+  Serial1.print(",\"Alert_Pin\":"); Serial1.print(alert_stat);
   Serial1.println("}");
 }
 

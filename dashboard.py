@@ -91,6 +91,10 @@ class DashboardApp:
         self.lbl_ft = ttk.Label(status_frame, text="OK (HIGH)", style='Value.TLabel', foreground="#2ecc71")
         self.lbl_ft.grid(row=2, column=1, sticky=tk.E, pady=5, padx=20)
 
+        ttk.Label(status_frame, text="INA260 Alert Pin:").grid(row=3, column=0, sticky=tk.W, pady=5)
+        self.lbl_alert = ttk.Label(status_frame, text="POWER OK (HIGH)", style='Value.TLabel', foreground="#2ecc71")
+        self.lbl_alert.grid(row=3, column=1, sticky=tk.E, pady=5, padx=20)
+
 
     def refresh_ports(self):
         ports = [port.device for port in serial.tools.list_ports.comports()]
@@ -149,6 +153,7 @@ class DashboardApp:
             if state == "PEAK": color = "#e67e22"
             elif state == "RAMP_DOWN": color = "#3498db"
             elif state == "COOLDOWN": color = "#95a5a6"
+            elif state == "WAIT_POWER": color = "#f39c12"
             self.lbl_state.config(text=state, foreground=color)
             
         if "Fault" in data:
@@ -161,6 +166,12 @@ class DashboardApp:
             text = "OK (HIGH)" if ft == 1 else "FAULT (LOW)"
             color = "#2ecc71" if ft == 1 else "#e74c3c"
             self.lbl_ft.config(text=text, foreground=color)
+
+        if "Alert_Pin" in data:
+            alert = data["Alert_Pin"]
+            text = "POWER OK (HIGH)" if alert == 1 else "UNDERVOLTAGE (LOW)"
+            color = "#2ecc71" if alert == 1 else "#e74c3c"
+            self.lbl_alert.config(text=text, foreground=color)
 
 if __name__ == "__main__":
     root = tk.Tk()
