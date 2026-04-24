@@ -77,6 +77,8 @@ float getVoltage();
 float getCurrent();
 void printJsonTelemetry(float v, float i, float p);
 void resetSystem();
+void initINA260();
+void startSequence();
 
 void setup() {
   Serial1.setTX(0);
@@ -109,11 +111,7 @@ void setup() {
   Wire1.setSCL(PIN_SCL);
   Wire1.begin();
 
-  // Configure INA260 Alert for Under-Voltage < 18V
-  // 18V / 1.25mV/LSB = 14400 (0x3840)
-  writeRegister(REG_ALERT_LIMIT, 0x3840);
-  // Enable Bus Under-Voltage Limit (Bit 12) in Transparent Mode (Active Low)
-  writeRegister(REG_MASK_ENABLE, 0x1000);
+  initINA260();
 
   // Configure PWM
   analogWriteFreq(PWM_FREQUENCY);
@@ -122,6 +120,15 @@ void setup() {
   pinMode(PIN_ALERT, INPUT_PULLUP);
 
   startSequence(); 
+}
+
+void initINA260() {
+  // Configure INA260 Alert for Under-Voltage < 18V
+  // 18V / 1.25mV/LSB = 14400 (0x3840)
+  writeRegister(REG_ALERT_LIMIT, 0x3840);
+  // Enable Bus Under-Voltage Limit (Bit 12) in Transparent Mode (Active Low)
+  writeRegister(REG_MASK_ENABLE, 0x1000);
+  delay(5); // Small delay for register to take effect
 }
 
 void startSequence() {
@@ -207,9 +214,10 @@ void loop() {
     }
   } else if (currentState == STATE_WAIT_POWER && alert_stat == HIGH) {
     // Power restored. Wait briefly for stability then start.
-    delay(50); // 50ms stabilization
+    delay(100); // 100ms stabilization
     if (digitalRead(PIN_ALERT) == HIGH) {
-      Serial1.println("{\"log\": \"POWER RESTORED (>18V)! Starting sequence.\"}");
+      Serial1.println("{\"log\": \"POWER RESTORED (>18V)! Re-initializing sensor and starting sequence.\"}");
+      initINA260(); // Re-apply configuration because INA260 likely reset when 24V was lost
       startSequence();
     }
   }
