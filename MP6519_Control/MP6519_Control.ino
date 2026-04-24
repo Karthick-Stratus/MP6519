@@ -36,12 +36,12 @@ float measuredBoostPower = 0.0;
 float targetHoldPower = 0.0;
 
 enum SystemState {
-  STATE_BOOST,
+  STATE_PEAK,
   STATE_RAMP_DOWN,
   STATE_HOLD,
   STATE_FAULT
 };
-SystemState currentState = STATE_BOOST;
+SystemState currentState = STATE_PEAK;
 
 enum FaultState {
   FAULT_NONE,
@@ -82,20 +82,12 @@ void setup() {
   pinMode(PIN_FT, INPUT_PULLUP);
   pinMode(PIN_RESET_BTN, INPUT_PULLUP); // Push button active LOW
 
-  resetSystem(); // Initializes state, ENB/PWM sequence, and timer
-}
+  // Hardware initially OFF
+  digitalWrite(PIN_EN, LOW);    
+  digitalWrite(PIN_MODE, HIGH); 
+  dutyCycle = 0;
+  analogWrite(PIN_PWM, 0);
 
-void resetSystem() {
-  currentState = STATE_BOOST;
-  currentFault = FAULT_NONE;
-  measuredBoostPower = 0.0;
-  targetHoldPower = 0.0;
-  
-  // IMPORTANT: ENB and PWM Sequence for MP6519
-  // The MP6519 enters standby if PWM is low while EN is high at startup.
-  digitalWrite(PIN_EN, LOW);    // 1. Keep disabled initially
-  digitalWrite(PIN_MODE, HIGH); // Set default mode
-  
   // Setup I2C on GP14/15 (Wire1)
   Wire1.setSDA(PIN_SDA);
   Wire1.setSCL(PIN_SCL);
@@ -104,13 +96,23 @@ void resetSystem() {
   // Configure PWM
   analogWriteFreq(PWM_FREQUENCY);
   analogWriteRange(PWM_RESOLUTION);
+
+  startSequence(); 
+}
+
+void startSequence() {
+  currentState = STATE_PEAK;
+  currentFault = FAULT_NONE;
+  measuredBoostPower = 0.0;
+  targetHoldPower = 0.0;
   
-  // 2. Apply initial 100% PWM before enabling EN
+  // IMPORTANT: ENB and PWM Sequence for MP6519
+  // 1. Apply initial 100% PWM before enabling EN
   dutyCycle = PWM_RESOLUTION; 
   analogWrite(PIN_PWM, dutyCycle);
   delay(2); // Wait 2ms for PWM to stabilize
   
-  // 3. Enable the driver
+  // 2. Enable the driver
   digitalWrite(PIN_EN, HIGH);   
   
   startTime = millis();
@@ -119,8 +121,28 @@ void resetSystem() {
 void loop() {
   // Check Hardware Reset Button
   if (digitalRead(PIN_RESET_BTN) == LOW) {
-    resetSystem();
-    delay(200); // Debounce
+    // 1. Disable ENB Immediately to cut power to brake
+    digitalWrite(PIN_EN, LOW);
+    dutyCycle = 0;
+    analogWrite(PIN_PWM, 0);
+
+    // 2. Clear UI variables
+    currentState = STATE_PEAK;
+    currentFault = FAULT_NONE;
+    measuredBoostPower = 0.0;
+    targetHoldPower = 0.0;
+    
+    // Send zeroed JSON to update UI immediately
+    printJsonTelemetry(0.0, 0.0, 0.0);
+    Serial1.println("{\"log\": \"SYSTEM RESET! Waiting 2 seconds...\"}");
+    
+    // 3. Wait 2 seconds before starting code
+    delay(2000); 
+    
+    // Wait until button is released before continuing
+    while(digitalRead(PIN_RESET_BTN) == LOW) { delay(10); }
+    
+    startSequence();
     return;
   }
 
@@ -131,7 +153,7 @@ void loop() {
   float current = getCurrent();
   float power = voltage * current;
 
-  if (currentState == STATE_BOOST) {
+  if (currentState == STATE_PEAK) {
     dutyCycle = PWM_RESOLUTION; // Force 100%
     
     if (power > measuredBoostPower) {
@@ -152,7 +174,7 @@ void loop() {
       } else {
         currentState = STATE_RAMP_DOWN;
         rampStartTime = millis();
-        targetHoldPower = measuredBoostPower * 0.10; // 10% of boost
+        targetHoldPower = measuredBoostPower * 0.15; // 15% of peak
       }
     }
   } 
@@ -230,7 +252,7 @@ void printJsonTelemetry(float v, float i, float p) {
   float duty_pct = (dutyCycle * 100.0) / PWM_RESOLUTION;
   
   String stateStr = "";
-  if (currentState == STATE_BOOST) stateStr = "BOOST";
+  if (currentState == STATE_PEAK) stateStr = "PEAK";
   else if (currentState == STATE_RAMP_DOWN) stateStr = "RAMP_DOWN";
   else if (currentState == STATE_HOLD) stateStr = "HOLD";
   else if (currentState == STATE_FAULT) stateStr = "FAULT";

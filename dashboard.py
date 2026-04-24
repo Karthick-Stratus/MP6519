@@ -126,7 +126,7 @@ class DashboardApp:
         if "State" in data:
             state = data["State"]
             color = "#2ecc71" if state != "FAULT" else "#e74c3c"
-            if state == "BOOST": color = "#e67e22"
+            if state == "PEAK": color = "#e67e22"
             elif state == "RAMP_DOWN": color = "#3498db"
             self.lbl_state.config(text=state, foreground=color)
             
