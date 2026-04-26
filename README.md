@@ -14,16 +14,25 @@ This repository contains the firmware for controlling a Brake Disk using the **M
   - **Long Run Mode**: Optional continuous testing loop with 1s cooldown between cycles.
 
 ## Pin Configuration (Pico 2)
-*   **GP19** = INA260 Alert Pin (18V Under-Voltage detection)
-*   **GP18** = Failure Indicator (Trigger High on Fault)
-*   **GP17** = Success Indicator (Pulse High on Peak Detection)
-*   **GP16** = Reset Test Sequence Button (Input Pull-up, Active Low)
-*   **GP15** = SCL (INA260 - I2C1) - Must have 10K pull-up
-*   **GP14** = SDA (INA260 - I2C1) - Must have 10K pull-up
-*   **GP13** = FT (Fault Trigger) - Input with 10K pull-up
-*   **GP12** = EN (Enable) - Output
-*   **GP11** = MODE - Output
-*   **GP10** = PWM - Output
+
+Detailed hardware pin mapping is available in the [hardware_pinout.json](hardware_pinout.json) file for AI-assisted programming and automated integration.
+
+| Signal | Pin (GP) | Mode | Description |
+| :--- | :--- | :--- | :--- |
+| **TX** | GP0 | UART | Serial1 TX (Telemetry Out) |
+| **RX** | GP1 | UART | Serial1 RX (Commands In) |
+| **STATUS_LED** | GP9 | OUTPUT | System Status Indicator |
+| **PWM** | GP10 | OUTPUT | MP6519 PWM Control |
+| **MODE** | GP11 | OUTPUT | MP6519 Mode Control |
+| **EN** | GP12 | OUTPUT | MP6519 Enable Control |
+| **FT** | GP13 | INPUT | MP6519 Fault Trigger (10K Pull-up) |
+| **SDA** | GP14 | I2C | INA260 I2C Data (10K Pull-up) |
+| **SCL** | GP15 | I2C | INA260 I2C Clock (10K Pull-up) |
+| **RESET_BTN** | GP16 | INPUT | Test Sequence Reset (Active Low) |
+| **SUCCESS** | GP17 | OUTPUT | Peak Detection Success Pulse |
+| **FAILURE** | GP18 | OUTPUT | Fault/Failure Trigger |
+| **ALERT** | GP19 | INPUT | INA260 Alert (18V UVP) |
+
 
 ---
 
