@@ -173,26 +173,48 @@ void updateChannel(int i, bool trigger) {
   analogWrite(CH[i].pwm, cState[i].duty);
 }
 
+float readVoltage(uint8_t addr) {
+  // Mock read - Replace with actual INA260 I2C register read (e.g., return 24.0V)
+  return 24.0;
+}
+
+float readCurrent(uint8_t addr) {
+  // Mock read - Replace with actual INA260 I2C register read (e.g., return 0.5A)
+  return 0.5;
+}
+
 float readWatts(uint8_t addr) {
-  // Mock read for example; in production, use INA260 library or register reads
-  // Placeholder logic for the AI to fill in with actual INA260 communication
-  return 0.0; 
+  return readVoltage(addr) * readCurrent(addr);
 }
 
 void reportTelemetry() {
-  // Formats JSON string for dashboard.py
   Serial.print("{");
-  for(int i=0; i<3; i++) {
-    Serial.print("\"CH"); Serial.print(i+1); Serial.print("\":{");
-    Serial.print("\"W\":"); Serial.print(0.0); // Placeholder
-    Serial.print(",\"State\":\""); Serial.print(cState[i].state == IDLE ? "IDLE" : cState[i].state == PEAK ? "PEAK" : cState[i].state == HOLD ? "HOLD" : "FAULT");
-    Serial.print("\",\"Fault\":\""); Serial.print(cState[i].fault_triggered ? "YES" : "NONE");
-    Serial.print("\",\"Duty\":"); Serial.print((cState[i].duty*100)/PWM_RES);
-    Serial.print("}");
-    if(i<2) Serial.print(",");
-  }
+  
+  // 1. INPUT STATUS
+  Serial.print("\"INPUTS\":{");
+  Serial.print("\"COMBINED\":"); Serial.print(digitalRead(SIG_IN_123));
+  Serial.print(",\"EMERGENCY\":"); Serial.print(digitalRead(SIG_IN_EMG));
   Serial.print(",\"PWR_OK\":"); Serial.print(digitalRead(PWR_SYS_OK));
   Serial.print(",\"EXT_F\":"); Serial.print(digitalRead(EXT_BK_FAULT));
   Serial.print(",\"INT_F\":"); Serial.print(digitalRead(INT_BK_FAULT));
+  Serial.print("},");
+  
+  // 2 & 3. CHANNELS: INA260 & MP6519 Status
+  for(int i=0; i<3; i++) {
+    Serial.print("\"CH"); Serial.print(i+1); Serial.print("\":{");
+    Serial.print("\"V\":"); Serial.print(readVoltage(CH[i].i2c_addr), 2);
+    Serial.print(",\"I\":"); Serial.print(readCurrent(CH[i].i2c_addr), 3);
+    Serial.print(",\"W\":"); Serial.print(readWatts(CH[i].i2c_addr), 2);
+    Serial.print(",\"PeakW\":"); Serial.print(cState[i].peak_watts, 2);
+    Serial.print(",\"HoldW\":"); Serial.print(cState[i].target_watts, 2);
+    Serial.print(",\"Duty\":"); Serial.print((cState[i].duty * 100.0) / PWM_RES, 1);
+    Serial.print(",\"State\":\""); 
+    Serial.print(cState[i].state == IDLE ? "IDLE" : cState[i].state == PEAK ? "PEAK" : cState[i].state == HOLD ? "HOLD" : "FAULT");
+    Serial.print("\",\"Fault\":\""); Serial.print(cState[i].fault_triggered ? "YES" : "NONE");
+    Serial.print("\",\"FT_PIN\":"); Serial.print(digitalRead(CH[i].ft));
+    Serial.print(",\"ALERT_PIN\":"); Serial.print(digitalRead(CH[i].alert));
+    Serial.print("}");
+    if(i<2) Serial.print(",");
+  }
   Serial.println("}");
 }
