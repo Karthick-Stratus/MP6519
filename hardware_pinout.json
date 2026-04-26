@@ -1,0 +1,53 @@
+{
+  "project": "MP6519 Brake Disk Control",
+  "hardware": {
+    "mcu": "Raspberry Pi Pico 2 (RP2350)",
+    "driver": "MP6519 (EV6519-Q-00A)",
+    "sensor": "INA260EVM Power Monitor"
+  },
+  "pin_mapping": {
+    "UART": {
+      "TX": 0,
+      "RX": 1,
+      "peripheral": "Serial1",
+      "description": "Communication with Host PC via Debug Probe"
+    },
+    "I2C": {
+      "SCL": 15,
+      "SDA": 14,
+      "peripheral": "Wire1",
+      "speed": "400kHz",
+      "devices": [
+        {
+          "name": "INA260",
+          "address": "0x40",
+          "description": "High-side current and voltage monitor"
+        }
+      ]
+    },
+    "MP6519_CONTROL": {
+      "EN": 12,
+      "MODE": 11,
+      "PWM": 10,
+      "FT": 13,
+      "description": "Control signals for MP6519 driver"
+    },
+    "INDICATORS": {
+      "STATUS_LED": 9,
+      "SUCCESS_PULSE": 17,
+      "FAILURE_TRIGGER": 18
+    },
+    "INTERRUPTS_INPUTS": {
+      "RESET_BTN": 16,
+      "INA260_ALERT": 19
+    }
+  },
+  "logic_levels": {
+    "vcc": "3.3V",
+    "io_standard": "LVCMOS"
+  },
+  "pwm_configuration": {
+    "frequency": 20000,
+    "resolution": 1024
+  }
+}
