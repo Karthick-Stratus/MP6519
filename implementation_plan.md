@@ -1,53 +1,33 @@
-# Implementation Plan - MP6519 & INA250EVM Control (RP2350)
+# Implementation Plan - MP6519 3-Channel Production (RP2040)
 
-This project involves controlling a Brake Disk using the MP6519 motor driver and monitoring power consumption via the INA250EVM (I2C) using a Raspberry Pi Pico 2 (RP2350).
+This document records the finalized implementation strategy for the production-grade 3-channel brake controller.
 
-## 1. Hardware Configuration
+## 1. Hardware Architecture
+- **MCU**: RP2040.
+- **Drivers**: 3x MP6519GQ-Z.
+- **Sensors**: 3x INA260AIPWR (I2C Addresses: 0x40, 0x41, 0x45).
+- **Protection**: Dual LTC4367 Protection Controllers.
+- **Logic Level**: 3.3V LVCMOS.
 
-### Pico 2 Pin Mapping
-| Pin | Function | Device | Notes |
-|---|---|---|---|
-| GP15 | SCL | INA250EVM | I2C Clock (External 10K Pull-up) |
-| GP14 | SDA | INA250EVM | I2C Data (External 10K Pull-up) |
-| GP13 | FT | MP6519 | Fault Trigger (Active Low, External 10K Pull-up) |
-| GP12 | EN | MP6519 | Enable Pin |
-| GP11 | MODE | MP6519 | Mode Selection (High/Low) |
-| GP10 | PWM | MP6519 | PWM Control |
+## 2. Pin Mapping (RP2040)
+| Function | Brake 1 | Brake 2 | Brake 3 |
+| :--- | :--- | :--- | :--- |
+| **ENABLE** | GPIO 5 | GPIO 6 | GPIO 7 |
+| **PWM** | GPIO 16 | GPIO 18 | GPIO 20 |
+| **FAULT (FT)** | GPIO 8 | GPIO 9 | GPIO 10 |
+| **MODE** | GPIO 11 | GPIO 12 | GPIO 13 |
+| **ALERT (INA)** | GPIO 14 | GPIO 24 | GPIO 25 |
 
-### Power Specifications
-- **Source**: 24VDC
-- **Initial Phase**: 20W (for 5 seconds)
-- **Hold Phase**: 10W (after 5 seconds)
+## 3. Firmware Logic (v1.2.0)
+- **Closed-Loop Control**: 100Hz frequency.
+- **Phases**:
+    1. **IDLE**: Waiting for trigger.
+    2. **PEAK**: 100% duty for 3 seconds; record max power.
+    3. **HOLD**: Maintain 15% of recorded max power via P-control loop.
+- **Triggers**:
+    - `GPIO 26`: Triggers CH3.
+    - `GPIO 27`: Triggers CH1 & CH2.
 
-## 2. Software Architecture
-
-### Core Components
-- **I2C Interface**: Initialize I2C on GP14/GP15 to communicate with the power monitor.
-- **PWM Controller**: Manage PWM frequency and duty cycle on GP10 to achieve target power.
-- **Control Logic**: A state machine or timer-based logic to handle the transition from 20W to 10W.
-- **Telemetry System**: Formatted Serial output for real-time monitoring.
-
-### Telemetry Columns
-- Voltage (V)
-- Current (A)
-- Duty Cycle (%)
-- PWM Frequency (Hz)
-- ENB Status (High/Low)
-- FT Status (Fault/OK)
-- MODE Level (High/Low)
-- Power (W)
-
-## 3. Implementation Steps
-
-1. **Project Initialization**: Create the basic Arduino sketch structure and README.
-2. **I2C & Sensor Setup**: Configure I2C1 (since GP14/15 are typically I2C1) and verify communication with the sensor.
-3. **PWM Configuration**: Set up PWM on GP10 with a default frequency (e.g., 20kHz).
-4. **Power Control Logic**:
-   - Calculate required duty cycle for 20W and 10W based on voltage readings.
-   - Use `millis()` to track the 5-second transition.
-5. **Telemetry Formatting**: Implement the column-based Serial print.
-6. **Testing & Calibration**: Verify readings and power output.
-
-## 4. Git Integration
-- Update `README.md` with setup instructions.
-- Upload the source code to the repository.
+## 4. Host Interface
+- **Protocol**: JSON Telemetry @ 10Hz.
+- **GUI**: Python Dashboard supporting 3 independent channel views and protection status.

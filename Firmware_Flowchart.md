@@ -1,79 +1,59 @@
-# MP6519 Brake Driver Firmware Flowchart
+# MP6519 3-Channel Firmware Flowchart
 
-This document outlines the state machine and logical flow of the RP2350 firmware controlling the MP6519 and reading the INA260 telemetry.
+This document outlines the logical flow and multi-channel state machine for the RP2040 firmware.
 
 ```mermaid
 flowchart TD
-    Start([Power On / Boot]) --> Setup["System Setup"]
-    Setup --> Wait3s["Wait 3 seconds<br/>Allow Serial Monitor"]
-    Wait3s --> InitPins["Initialize Pins & I2C1"]
-    InitPins --> InitINA["initINA260<br/>Set 18V Under-Voltage Alert"]
-    InitINA --> HardwareOff["Ensure ENB=LOW, PWM=0"]
-    HardwareOff --> WaitPower["State = WAIT_POWER"]
+    Start([Power On / Boot]) --> Init["Initialize System"]
+    Init --> Config["Load Pin Config & I2C Bus<br/>(400kHz, 20kHz PWM)"]
+    Config --> Safety["Power Safety Check<br/>(LTC4367 Status)"]
     
-    WaitPower --> CheckAlert{"INA260 Alert Pin<br/>(GP19) HIGH?"}
-    CheckAlert -- No --> WaitPower
-    CheckAlert -- Yes --> StartSeq["Start Sequence"]
-    
-    StartSeq --> Seq1["Apply 100% PWM Duty Cycle"]
-    Seq1 --> Seq2["Wait 2ms for PWM stabilization"]
-    Seq2 --> Seq3["Set ENB=HIGH to Enable Driver"]
-    Seq3 --> SetStatePeak["State = PEAK"]
-    SetStatePeak --> Loop["Main Loop 10Hz"]
+    Safety -- OK --> MainLoop["Main Loop (100Hz)"]
+    Safety -- Fault --> FaultState["Emergency Shutdown<br/>Brake Disable"]
 
-    Loop --> CheckReset{"Reset Button<br/>Pressed?"}
-    CheckReset -- Yes --> DoReset["Disable ENB & PWM<br/>Clear Variables<br/>Send 0 JSON"]
-    DoReset --> Wait2s["Wait 2 Seconds"]
-    Wait2s --> WaitRelease["Wait for Button Release"]
-    WaitRelease --> StartSeq
-    
-    CheckReset -- No --> ReadSensors["Read Voltage, Current<br/>Calculate Power<br/>Read FT & Alert Pins"]
-    
-    ReadSensors --> CheckAlert2{"V < 18V?<br/>(Alert LOW)"}
-    CheckAlert2 -- Yes --> DoPowerLoss["Disable Output<br/>State = WAIT_POWER"]
-    DoPowerLoss --> Loop
-    
-    CheckAlert2 -- No --> CheckFT{"FT Pin<br/>(GP13) LOW?"}
-    CheckFT -- Yes --> FT_Time{"Elapsed > 100ms?"}
-    FT_Time -- Yes --> TriggerFT["Trigger DRIVER_HARDWARE Fault"]
-    TriggerFT --> FaultState
-    FT_Time -- No --> CheckState
-    CheckFT -- No --> CheckState{"Current State"}
-    
-    CheckState -- PEAK --> PeakLogic["Force 100% PWM<br/>Track Max Power"]
-    PeakLogic --> PeakShort{"Power > 60W?"}
-    PeakShort -- Yes --> TriggerShort["Trigger SHORT_CIRCUIT Fault"]
-    TriggerShort --> FaultState
-    PeakShort -- No --> PeakTime{"Elapsed >= 3s?"}
-    PeakTime -- No --> ApplyPWM
-    PeakTime -- Yes --> PeakOpen{"Max Power < 0.5W?"}
-    PeakOpen -- Yes --> TriggerOpen["Trigger OPEN_CIRCUIT Fault"]
-    TriggerOpen --> FaultState
-    PeakOpen -- No --> SetRamp["Calculate Target = MaxW * 15%<br/>State = RAMP_DOWN"]
-    SetRamp --> ApplyPWM
-    
-    CheckState -- RAMP_DOWN --> RampLogic["Smoothly decrease PWM towards Target"]
-    RampLogic --> RampTime{"Elapsed >= 5s<br/>in Ramp?"}
-    RampTime -- No --> ApplyPWM
-    RampTime -- Yes --> SetHold["State = HOLD"]
-    SetHold --> ApplyPWM
-    
-    CheckState -- HOLD --> HoldLogic["Maintain Target Power"]
-    HoldLogic --> LongRunCheck{"Long Run<br/>Enabled?"}
-    LongRunCheck -- Yes --> HoldTime{"Hold >= 3s?"}
-    HoldTime -- Yes --> SetCD["State = COOLDOWN"]
-    HoldTime -- No --> ApplyPWM
-    LongRunCheck -- No --> ApplyPWM
-    
-    CheckState -- COOLDOWN --> CDLogic["Disable Output<br/>Wait 1 Second"]
-    CDLogic --> CDTime{"Elapsed >= 1s?"}
-    CDTime -- Yes --> StartSeq
-    CDTime -- No --> ApplyPWM
+    subgraph Monitoring["Continuous Monitoring"]
+        InputCheck["Poll GPIO 26 & 27<br/>(Combined / Emergency)"]
+        SensCheck["Read 3x INA260<br/>(0x40, 0x41, 0x45)"]
+        HWFault["Monitor FT Pins<br/>(GPIO 8, 9, 10)"]
+    end
 
-    CheckState -- FAULT --> FaultState["Set PWM=0, ENB=LOW"]
-    FaultState --> ApplyPWM
+    MainLoop --> Monitoring
+    Monitoring --> StateSelect{"Input Triggered?"}
+
+    StateSelect -- "G26 HIGH" --> TriggerB3["Start Channel 3 Sequence"]
+    StateSelect -- "G27 HIGH" --> TriggerB12["Start Channel 1 & 2 Sequence"]
+    StateSelect -- None --> Idle["Maintain IDLE"]
+
+    subgraph Sequence["Brake Control Sequence"]
+        S_Peak["PEAK PHASE:<br/>100% Duty for 3s<br/>Sample W_peak"]
+        S_Hold["HOLD PHASE:<br/>Closed-Loop P-Control<br/>Maintain 0.15 * W_peak"]
+    end
+
+    TriggerB3 --> S_Peak
+    TriggerB12 --> S_Peak
     
-    ApplyPWM["Constrain & Apply PWM to PIN 10"] --> SendJSON["Print JSON Telemetry via Serial1"]
-    SendJSON --> Delay["Delay 100ms"]
-    Delay --> Loop
+    S_Peak --> S_Hold
+    S_Hold -- "Input Signal Change" --> S_Peak
+    S_Hold -- "Input LOW" --> Idle
+    
+    HWFault -- "FT Pin LOW" --> FaultState
 ```
+
+## 1. Logic Sequence (Per Channel)
+1.  **Idle State**: No PWM output. `ENABLE` pin is `LOW`.
+2.  **Peak Phase**: 
+    - Triggered by respective input.
+    - `PWM` set to 100%.
+    - `ENABLE` set to `HIGH`.
+    - Samples power for 3 seconds.
+3.  **Hold Phase**:
+    - Calculates target wattage (15% of Peak).
+    - Runs a high-frequency control loop (100Hz) adjusting PWM to match target.
+4.  **Shutdown**:
+    - Triggered if input goes `LOW`.
+    - PWM and Enable are immediately disabled.
+
+## 2. Safety Integrations
+- **Watchdog**: Hardware watchdog ensures the system restarts if the loop hangs.
+- **LTC4367**: Hardware-level protection for over/under voltage.
+- **Fault (FT)**: Immediate hardware interrupt if the MP6519 detects a driver-level fault.

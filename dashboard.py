@@ -5,12 +5,45 @@ import serial.tools.list_ports
 import json
 import threading
 
+class BrakeChannelUI:
+    def __init__(self, parent, channel_name, color):
+        self.frame = ttk.LabelFrame(parent, text=channel_name)
+        self.frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=5, pady=5)
+        
+        self.values = {}
+        fields = [
+            ("Voltage", "V", " V"),
+            ("Current", "I", " A"),
+            ("Watts", "W", " W"),
+            ("State", "State", ""),
+            ("Fault", "Fault", ""),
+            ("Duty", "Duty", " %")
+        ]
+        
+        for i, (label, key, unit) in enumerate(fields):
+            ttk.Label(self.frame, text=f"{label}:").grid(row=i, column=0, sticky=tk.W, padx=5, pady=2)
+            val_lbl = ttk.Label(self.frame, text="---", font=('Helvetica', 10, 'bold'), foreground=color)
+            val_lbl.grid(row=i, column=1, sticky=tk.E, padx=5, pady=2)
+            self.values[key] = (val_lbl, unit)
+
+    def update(self, data):
+        for key, (lbl, unit) in self.values.items():
+            if key in data:
+                val = data[key]
+                lbl.config(text=f"{val}{unit}")
+                if key == "State":
+                    color = "#2ecc71" if val == "HOLD" else "#e67e22" if val == "PEAK" else "#95a5a6"
+                    lbl.config(foreground=color)
+                if key == "Fault":
+                    color = "#e74c3c" if val != "NONE" else "#2ecc71"
+                    lbl.config(foreground=color)
+
 class DashboardApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("MP6519 Brake Driver Dashboard v2.0")
-        self.root.geometry("600x600")
-        self.root.configure(bg="#2c3e50")
+        self.root.title("MP6519 3-Channel Production Dashboard v1.2.0")
+        self.root.geometry("900x500")
+        self.root.configure(bg="#1a1a1a")
         
         self.serial_port = None
         self.is_reading = False
@@ -20,158 +53,99 @@ class DashboardApp:
     def setup_ui(self):
         style = ttk.Style()
         style.theme_use('clam')
-        style.configure('TFrame', background='#2c3e50')
-        style.configure('TLabel', background='#2c3e50', foreground='#ecf0f1', font=('Helvetica', 12))
-        style.configure('Header.TLabel', font=('Helvetica', 16, 'bold'), foreground='#3498db')
-        style.configure('Value.TLabel', font=('Helvetica', 14, 'bold'), foreground='#f1c40f')
-        style.configure('Fault.TLabel', font=('Helvetica', 14, 'bold'), foreground='#e74c3c')
+        style.configure('TFrame', background='#1a1a1a')
+        style.configure('TLabelframe', background='#1a1a1a', foreground='#ffffff')
+        style.configure('TLabelframe.Label', background='#1a1a1a', foreground='#3498db', font=('Helvetica', 10, 'bold'))
+        style.configure('TLabel', background='#1a1a1a', foreground='#ecf0f1')
         
-        # Header Frame (COM Port Selection)
-        header_frame = ttk.Frame(self.root)
-        header_frame.pack(fill=tk.X, padx=20, pady=20)
+        # Connection Bar
+        conn_frame = ttk.Frame(self.root)
+        conn_frame.pack(fill=tk.X, padx=10, pady=10)
         
-        ttk.Label(header_frame, text="COM Port:").pack(side=tk.LEFT, padx=5)
-        
+        ttk.Label(conn_frame, text="COM Port:").pack(side=tk.LEFT, padx=5)
         self.port_var = tk.StringVar()
-        self.port_combo = ttk.Combobox(header_frame, textvariable=self.port_var, width=15)
+        self.port_combo = ttk.Combobox(conn_frame, textvariable=self.port_var, width=10)
         self.port_combo.pack(side=tk.LEFT, padx=5)
         self.refresh_ports()
         
-        self.connect_btn = ttk.Button(header_frame, text="Connect", command=self.toggle_connection)
+        self.connect_btn = ttk.Button(conn_frame, text="Connect", command=self.toggle_connection)
         self.connect_btn.pack(side=tk.LEFT, padx=5)
         
-        ttk.Button(header_frame, text="Refresh Ports", command=self.refresh_ports).pack(side=tk.LEFT, padx=5)
+        self.status_lbl = ttk.Label(conn_frame, text="DISCONNECTED", foreground="#e74c3c", font=('Helvetica', 10, 'bold'))
+        self.status_lbl.pack(side=tk.RIGHT, padx=20)
 
-        self.long_run_var = tk.BooleanVar(value=False)
-        self.long_run_check = ttk.Checkbutton(header_frame, text="Long Run Test", variable=self.long_run_var, command=self.send_long_run_cmd)
-        self.long_run_check.pack(side=tk.LEFT, padx=20)
+        # Main Channels Container
+        channels_container = ttk.Frame(self.root)
+        channels_container.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
         
-        # Data Frame
-        data_frame = ttk.Frame(self.root)
-        data_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=10)
+        self.channels = {
+            "CH1": BrakeChannelUI(channels_container, "Brake 1 (External)", "#3498db"),
+            "CH2": BrakeChannelUI(channels_container, "Brake 2 (External)", "#2ecc71"),
+            "CH3": BrakeChannelUI(channels_container, "Brake 3 (Internal)", "#f1c40f")
+        }
         
-        # Define grid
-        for i in range(4):
-            data_frame.columnconfigure(i, weight=1)
-            
-        labels = [
-            ("Voltage:", "V", " V"),
-            ("Current:", "I", " A"),
-            ("Live Watts:", "W", " W"),
-            ("Frequency:", "Freq", " Hz"),
-            ("Duty Cycle:", "Duty", " %"),
-            ("Peak Measured Power:", "MaxW", " W"),
-            ("Target Hold Power (15%):", "TgtW", " W"),
-            ("Test Cycles Completed:", "Cycles", ""),
+        # System Status Bar
+        sys_frame = ttk.LabelFrame(self.root, text="System Protection Status")
+        sys_frame.pack(fill=tk.X, padx=10, pady=10)
+        
+        self.sys_values = {}
+        sys_fields = [
+            ("PWR_SYS_OK", "PWR_OK"),
+            ("EXT_FAULT", "EXT_F"),
+            ("INT_FAULT", "INT_F")
         ]
         
-        self.value_labels = {}
-        
-        row = 0
-        for title, key, unit in labels:
-            ttk.Label(data_frame, text=title).grid(row=row, column=0, sticky=tk.W, pady=8)
-            val_lbl = ttk.Label(data_frame, text="---" + unit, style='Value.TLabel')
-            val_lbl.grid(row=row, column=1, sticky=tk.E, pady=8)
-            self.value_labels[key] = (val_lbl, unit)
-            row += 1
-            
-        # Status Frame
-        status_frame = ttk.Frame(self.root)
-        status_frame.pack(fill=tk.X, padx=20, pady=20)
-        
-        ttk.Label(status_frame, text="System State:").grid(row=0, column=0, sticky=tk.W, pady=5)
-        self.lbl_state = ttk.Label(status_frame, text="DISCONNECTED", style='Value.TLabel')
-        self.lbl_state.grid(row=0, column=1, sticky=tk.E, pady=5, padx=20)
-        
-        ttk.Label(status_frame, text="Active Fault:").grid(row=1, column=0, sticky=tk.W, pady=5)
-        self.lbl_fault = ttk.Label(status_frame, text="NONE", style='Value.TLabel')
-        self.lbl_fault.grid(row=1, column=1, sticky=tk.E, pady=5, padx=20)
-
-        ttk.Label(status_frame, text="Driver HW Pin (FT):").grid(row=2, column=0, sticky=tk.W, pady=5)
-        self.lbl_ft = ttk.Label(status_frame, text="OK (HIGH)", style='Value.TLabel', foreground="#2ecc71")
-        self.lbl_ft.grid(row=2, column=1, sticky=tk.E, pady=5, padx=20)
-
-        ttk.Label(status_frame, text="INA260 Alert Pin:").grid(row=3, column=0, sticky=tk.W, pady=5)
-        self.lbl_alert = ttk.Label(status_frame, text="POWER OK (HIGH)", style='Value.TLabel', foreground="#2ecc71")
-        self.lbl_alert.grid(row=3, column=1, sticky=tk.E, pady=5, padx=20)
-
+        for i, (label, key) in enumerate(sys_fields):
+            ttk.Label(sys_frame, text=f"{label}:").pack(side=tk.LEFT, padx=10)
+            val_lbl = ttk.Label(sys_frame, text="---", font=('Helvetica', 10, 'bold'))
+            val_lbl.pack(side=tk.LEFT, padx=5)
+            self.sys_values[key] = val_lbl
 
     def refresh_ports(self):
         ports = [port.device for port in serial.tools.list_ports.comports()]
         self.port_combo['values'] = ports
-        if ports:
-            self.port_combo.current(0)
+        if ports: self.port_combo.current(0)
             
     def toggle_connection(self):
         if self.is_reading:
             self.is_reading = False
-            if self.serial_port:
-                self.serial_port.close()
+            if self.serial_port: self.serial_port.close()
             self.connect_btn.config(text="Connect")
-            self.lbl_state.config(text="DISCONNECTED", foreground="#f1c40f")
+            self.status_lbl.config(text="DISCONNECTED", foreground="#e74c3c")
         else:
             port = self.port_var.get()
             if port:
                 try:
-                    self.serial_port = serial.Serial(port, 115200, timeout=1)
+                    self.serial_port = serial.Serial(port, 115200, timeout=0.1)
                     self.is_reading = True
                     self.connect_btn.config(text="Disconnect")
-                    self.lbl_state.config(text="CONNECTING...", foreground="#3498db")
+                    self.status_lbl.config(text="CONNECTED", foreground="#2ecc71")
                     threading.Thread(target=self.read_serial, daemon=True).start()
                 except Exception as e:
-                    print(f"Error opening port: {e}")
+                    print(f"Error: {e}")
                     
-    def send_long_run_cmd(self):
-        if self.is_reading and self.serial_port and self.serial_port.is_open:
-            enable = self.long_run_var.get()
-            cmd = json.dumps({"cmd": "LONG_RUN", "enable": enable}) + "\n"
-            try:
-                self.serial_port.write(cmd.encode('utf-8'))
-                print(f"Sent: {cmd.strip()}")
-            except Exception as e:
-                print(f"Error sending command: {e}")
-
     def read_serial(self):
-        while self.is_reading and self.serial_port and self.serial_port.is_open:
+        while self.is_reading:
             try:
                 line = self.serial_port.readline().decode('utf-8').strip()
                 if line.startswith("{") and line.endswith("}"):
                     data = json.loads(line)
-                    if "log" not in data:
-                        self.root.after(0, self.update_data, data)
-            except Exception as e:
-                pass
+                    self.root.after(0, self.update_ui, data)
+            except: pass
 
-    def update_data(self, data):
-        for key, (lbl, unit) in self.value_labels.items():
+    def update_ui(self, data):
+        # Update Individual Channels
+        for ch_id in ["CH1", "CH2", "CH3"]:
+            if ch_id in data:
+                self.channels[ch_id].update(data[ch_id])
+        
+        # Update System Status
+        for key, lbl in self.sys_values.items():
             if key in data:
-                lbl.config(text=f"{data[key]}{unit}")
-                
-        if "State" in data:
-            state = data["State"]
-            color = "#2ecc71" if state != "FAULT" else "#e74c3c"
-            if state == "PEAK": color = "#e67e22"
-            elif state == "RAMP_DOWN": color = "#3498db"
-            elif state == "COOLDOWN": color = "#95a5a6"
-            elif state == "WAIT_POWER": color = "#f39c12"
-            self.lbl_state.config(text=state, foreground=color)
-            
-        if "Fault" in data:
-            fault = data["Fault"]
-            color = "#e74c3c" if fault != "NONE" else "#2ecc71"
-            self.lbl_fault.config(text=fault, foreground=color)
-
-        if "FT_Pin" in data:
-            ft = data["FT_Pin"]
-            text = "OK (HIGH)" if ft == 1 else "FAULT (LOW)"
-            color = "#2ecc71" if ft == 1 else "#e74c3c"
-            self.lbl_ft.config(text=text, foreground=color)
-
-        if "Alert_Pin" in data:
-            alert = data["Alert_Pin"]
-            text = "POWER OK (HIGH)" if alert == 1 else "UNDERVOLTAGE (LOW)"
-            color = "#2ecc71" if alert == 1 else "#e74c3c"
-            self.lbl_alert.config(text=text, foreground=color)
+                val = data[key]
+                text = "OK" if val == 1 else "FAULT"
+                color = "#2ecc71" if val == 1 else "#e74c3c"
+                lbl.config(text=text, foreground=color)
 
 if __name__ == "__main__":
     root = tk.Tk()

@@ -1,69 +1,70 @@
-# MP6519 Brake Driver Test Jig - System Architecture
+# MP6519 3-Channel Brake Driver System - System Architecture
 
-This document describes the overall system architecture, hardware connections, and data flow of the MP6519 Brake Driver Test Jig project.
+This document describes the overall system architecture, hardware connections, and data flow for the final production version of the MP6519 3-Channel Brake Driver System.
 
 ## 1. System Overview
-The system is designed to intelligently apply power to a 24V DC Brake Disk using a closed-loop control system. It features fault detection, precise power management (boost and hold phases), and live telemetry visualization via a Python desktop application.
+The system is a high-reliability industrial brake controller based on the **RP2040 MCU**. It manages three independent brake channels with closed-loop power monitoring and multi-stage protection circuitry.
 
 ```mermaid
-graph LR
-    subgraph PC["Host Computer (Windows)"]
-        GUI["Python Dashboard (dashboard.py)"]
-        Serial["USB COM Port (115200 baud)"]
-        GUI <-->|JSON Telemetry| Serial
+graph TD
+    subgraph Host["Host PC (Windows)"]
+        GUI["3-Channel Dashboard (dashboard.py)"]
+        Serial["USB COM Port (115200)"]
     end
 
-    subgraph Debugger["RPI Debug Probe"]
-        D_UART["UART Tx/Rx"]
-        D_SWD["SWD Interface"]
-        Serial <--> D_UART
+    subgraph MCU["RP2040 Core"]
+        Logic["3-Channel State Machine"]
+        I2C1["I2C1 (Fast Mode 400kHz)"]
+        PWM["High-Speed PWM (20kHz)"]
+        Inputs["Trigger & Fault Inputs"]
     end
 
-    subgraph Pico["Raspberry Pi Pico 2 (RP2350)"]
-        Fw["MP6519_Control.ino Firmware"]
-        UART0["UART0 (GP0, GP1)"]
-        I2C1["I2C1 (GP14, GP15)"]
-        PWM_OUT["PWM (GP10)"]
-        ENB_OUT["ENB (GP12)"]
-        BTN["Reset Button (GP16)"]
-        
-        UART0 <--> Fw
-        Fw --> I2C1
-        Fw --> PWM_OUT
-        Fw --> ENB_OUT
-        BTN --> Fw
+    subgraph Protection["Power & Safety"]
+        LTC["Dual LTC4367 Protection"]
+        PWR_OK["SN74AHC1G32 (Status OR)"]
     end
 
-    subgraph Sensors["Power Sensing"]
-        INA260["INA260EVM Power Monitor"]
-        I2C1 <-->|I2C Bus| INA260
+    subgraph B1["Brake Channel 1"]
+        D1["MP6519 Driver"]
+        S1["INA260 (0x40)"]
     end
 
-    subgraph Driver["Motor Driver"]
-        MP6519["EV6519-Q-00A (MP6519)"]
-        PWM_OUT --> MP6519
-        ENB_OUT --> MP6519
+    subgraph B2["Brake Channel 2"]
+        D2["MP6519 Driver"]
+        S2["INA260 (0x41)"]
     end
 
-    subgraph Load["Physical Load"]
-        Brake["24V DC Brake Disk"]
-        Supply["24V DC Power Supply"]
-        MP6519 --> Brake
-        Supply --> INA260
-        INA260 --> MP6519
+    subgraph B3["Brake Channel 3"]
+        D3["MP6519 Driver"]
+        S3["INA260 (0x45)"]
     end
 
-    D_UART <--> UART0
+    GUI <--> Serial
+    Serial <--> MCU
+    MCU --> I2C1
+    I2C1 <--> S1 & S2 & S3
+    MCU --> D1 & D2 & D3
+    LTC --> MCU
+    PWR_OK --> MCU
 ```
 
-## 2. Hardware Mapping
-*   **RP2350 to INA260**: I2C1 (SCL=GP15, SDA=GP14) with external 10K pull-ups.
-*   **RP2350 to MP6519**: EN=GP12, MODE=GP11, PWM=GP10, FT=GP13.
-*   **RP2350 to Reset Button**: GP16 (Internal Pull-up, connect to GND to trigger).
-*   **RP2350 to PC**: RPI Debugger connected to UART0 (GP0, GP1).
+## 2. Hardware Architecture
+- **MCU**: RP2040 (Dual ARM Cortex-M0+).
+- **Communication**: UART0 for telemetry/commands; I2C1 for power monitoring.
+- **Brake Drivers**: 3x MP6519GQ-Z, each with Enable, PWM, Fault, and Mode controls.
+- **Monitoring**: 3x INA260AIPWR for high-side current and voltage sensing.
+- **Protection**: Dual LTC4367 for over-voltage, under-voltage, and reverse-voltage protection.
 
-## 3. Data Flow
-1.  **Sensing**: The INA260 continuously monitors the high-side 24V supply going into the MP6519 driver.
-2.  **Control**: The Pico 2 firmware reads the INA260 at 10Hz. Based on the calculated wattage, it runs a closed-loop controller adjusting the PWM duty cycle on GP10.
-3.  **Telemetry**: Every 100ms, the Pico 2 formats a JSON string containing V, I, W, PWM frequency, Duty Cycle, Fault State, and Phase State.
-4.  **Visualization**: The Python application reads this JSON string over the Serial COM port, parses it, and dynamically updates the Tkinter UI dashboard.
+## 3. Control Methodology
+### 3.1 Trigger Logic
+- **Combined Input (GPIO 26)**: Triggers Channel 3 sequence.
+- **Emergency Input (GPIO 27)**: Triggers Channel 1 & 2 sequence.
+
+### 3.2 Closed-Loop Operation
+Each channel follows a strict 3-phase sequence:
+1.  **Peak Phase (3s)**: Applies 100% duty cycle to detect maximum power draw.
+2.  **Ramp Phase**: Transitions smoothly to the maintenance power level.
+3.  **Hold Phase**: Uses telemetry feedback to maintain exactly **15%** of the measured peak wattage.
+
+## 4. Telemetry & User Interface
+The system streams real-time JSON telemetry at 10Hz, providing independent V, I, W, and status for all three channels. The Python Dashboard provides a centralized view for monitoring and testing.
