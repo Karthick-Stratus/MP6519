@@ -1,68 +1,77 @@
 {
   "project": "MP6519 Brake Disk Control",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "design_status": "Final Schematic Design",
   "hardware": {
     "mcu": "RP2040",
-    "drivers": [
-      {
-        "id": 1,
-        "model": "MP6519GQ-Z",
-        "description": "Brake 1 Controller"
-      },
-      {
-        "id": 2,
-        "model": "MP6519GQ-Z",
-        "description": "Brake 2 Controller"
-      },
-      {
-        "id": 3,
-        "model": "MP6519GQ-Z",
-        "description": "Brake 3 Controller"
-      }
-    ]
+    "peripheral_drivers": {
+      "motor_driver": "MP6519GQ-Z",
+      "power_monitor": "INA260AIPWR",
+      "protection_controller": "LTC4367",
+      "logic_gate": "SN74AHC1G32DBVR"
+    }
   },
   "pin_mapping": {
     "UART": {
       "peripheral": "UART0",
       "description": "Main Serial Print / Debug",
       "pins": {
-        "TX": { "gpio": 0, "physical_pin": 2, "label": "UART0-TX" },
-        "RX": { "gpio": 1, "physical_pin": 3, "label": "UART0-RX" }
+        "TX": { "gpio": 0, "physical_pin": 2, "direction": "OUTPUT", "label": "UART0-TX" },
+        "RX": { "gpio": 1, "physical_pin": 3, "direction": "INPUT", "label": "UART0-RX" }
       }
     },
     "I2C": {
       "peripheral": "I2C1",
       "pins": {
-        "SDA": { "gpio": 2, "physical_pin": 4, "label": "I2C1-SDA" },
-        "SCL": { "gpio": 3, "physical_pin": 5, "label": "I2C1-SCL" }
-      }
-    },
-    "INDICATORS": {
-      "ALERT_LED": {
-        "gpio": 4,
-        "physical_pin": 6,
-        "label": "ALERT",
-        "circuitry": "Connected to N-MOSFET Gate",
-        "description": "System Alert/Status LED"
+        "SDA": { "gpio": 2, "physical_pin": 4, "direction": "BIDIRECTIONAL", "label": "I2C1-SDA" },
+        "SCL": { "gpio": 3, "physical_pin": 5, "direction": "OUTPUT", "label": "I2C1-SCL" }
       }
     },
     "BRAKE_CHANNELS": {
       "BRAKE_1": {
-        "ENABLE": { "gpio": 5, "physical_pin": 7, "label": "B1_EN", "hardware_config": "10K Pull-Down", "connection": "ENB MP6519GQ-Z" },
-        "FAULT": { "gpio": 8, "physical_pin": 11, "label": "B1_FT", "hardware_config": "10K Pull-Up to 3.3V", "connection": "FT MP6519GQ-Z" },
-        "MODE": { "gpio": 11, "physical_pin": 14, "label": "B1_MODE", "hardware_config": "10K Pull-Up to 3.3V", "connection": "MODE MP6519GQ-Z" }
+        "ENABLE": { "gpio": 5, "physical_pin": 7, "direction": "OUTPUT", "label": "B1_EN", "hardware_config": "10K Pull-Down", "connection": "ENB MP6519GQ-Z" },
+        "PWM": { "gpio": 16, "physical_pin": 27, "direction": "OUTPUT", "label": "B1_PWM", "hardware_config": "10K Pull-Down to GND", "connection": "PWM MP6519GQ-Z" },
+        "FAULT": { "gpio": 8, "physical_pin": 11, "direction": "INPUT", "label": "B1_FT", "hardware_config": "10K Pull-Up to 3.3V", "connection": "FT MP6519GQ-Z" },
+        "MODE": { "gpio": 11, "physical_pin": 14, "direction": "OUTPUT", "label": "B1_MODE", "hardware_config": "10K Pull-Up to 3.3V", "connection": "MODE MP6519GQ-Z" },
+        "ALERT": { "gpio": 14, "physical_pin": 17, "direction": "INPUT", "label": "B1_ALERT", "hardware_config": "10K Pull-Up to 3.3V", "connection": "ALERT INA260AIPWR" }
       },
       "BRAKE_2": {
-        "ENABLE": { "gpio": 6, "physical_pin": 8, "label": "B2_EN", "hardware_config": "10K Pull-Down", "connection": "ENB MP6519GQ-Z" },
-        "FAULT": { "gpio": 9, "physical_pin": 12, "label": "B2_FT", "hardware_config": "10K Pull-Up to 3.3V", "connection": "FT MP6519GQ-Z" },
-        "MODE": { "gpio": 12, "physical_pin": 15, "label": "B2_MODE", "hardware_config": "10K Pull-Up to 3.3V", "connection": "MODE MP6519GQ-Z" }
+        "ENABLE": { "gpio": 6, "physical_pin": 8, "direction": "OUTPUT", "label": "B2_EN", "hardware_config": "10K Pull-Down", "connection": "ENB MP6519GQ-Z" },
+        "PWM": { "gpio": 18, "physical_pin": 29, "direction": "OUTPUT", "label": "B2_PWM", "hardware_config": "10K Pull-Down to GND", "connection": "PWM MP6519GQ-Z" },
+        "FAULT": { "gpio": 9, "physical_pin": 12, "direction": "INPUT", "label": "B2_FT", "hardware_config": "10K Pull-Up to 3.3V", "connection": "FT MP6519GQ-Z" },
+        "MODE": { "gpio": 12, "physical_pin": 15, "direction": "OUTPUT", "label": "B2_MODE", "hardware_config": "10K Pull-Up to 3.3V", "connection": "MODE MP6519GQ-Z" },
+        "ALERT": { "gpio": 24, "physical_pin": 36, "direction": "INPUT", "label": "B2_ALERT", "hardware_config": "10K Pull-Up to 3.3V", "connection": "ALERT INA260AIPWR" }
       },
       "BRAKE_3": {
-        "ENABLE": { "gpio": 7, "physical_pin": 9, "label": "B3_EN", "hardware_config": "10K Pull-Down", "connection": "ENB MP6519GQ-Z" },
-        "FAULT": { "gpio": 10, "physical_pin": 13, "label": "B3_FT", "hardware_config": "10K Pull-Up to 3.3V", "connection": "FT MP6519GQ-Z" },
-        "MODE": { "gpio": 13, "physical_pin": 16, "label": "B3_MODE", "hardware_config": "10K Pull-Up to 3.3V", "connection": "MODE MP6519GQ-Z" }
+        "ENABLE": { "gpio": 7, "physical_pin": 9, "direction": "OUTPUT", "label": "B3_EN", "hardware_config": "10K Pull-Down", "connection": "ENB MP6519GQ-Z" },
+        "PWM": { "gpio": 20, "physical_pin": 31, "direction": "OUTPUT", "label": "B3_PWM", "hardware_config": "10K Pull-Down to GND", "connection": "PWM MP6519GQ-Z" },
+        "FAULT": { "gpio": 10, "physical_pin": 13, "direction": "INPUT", "label": "B3_FT", "hardware_config": "10K Pull-Up to 3.3V", "connection": "FT MP6519GQ-Z" },
+        "MODE": { "gpio": 13, "physical_pin": 16, "direction": "OUTPUT", "label": "B3_MODE", "hardware_config": "10K Pull-Up to 3.3V", "connection": "MODE MP6519GQ-Z" },
+        "ALERT": { "gpio": 25, "physical_pin": 37, "direction": "INPUT", "label": "B3_ALERT", "hardware_config": "10K Pull-Up to 3.3V", "connection": "ALERT INA260AIPWR" }
       }
+    },
+    "POWER_PROTECTION": {
+      "LTC4367_SYSTEM_STATUS": { "gpio": 17, "physical_pin": 28, "direction": "INPUT", "label": "PWR_SYS_OK", "description": "HIGH when both LTC4367 are ON (via SN74AHC1G32DBVR)" },
+      "EXTERNAL_BRAKE_FAULT": { "gpio": 19, "physical_pin": 30, "direction": "INPUT", "label": "EXT_BK_FAULT", "description": "LTC4367 Fault (Inverted via MOSFET): HIGH=FAULT, LOW=NORMAL" },
+      "INTERNAL_BRAKE_FAULT": { "gpio": 22, "physical_pin": 34, "direction": "INPUT", "label": "INT_BK_FAULT", "description": "LTC4367 Fault (Inverted via MOSFET): HIGH=FAULT, LOW=NORMAL" },
+      "EXTERNAL_BRAKE_SHUTDOWN": { "gpio": 28, "physical_pin": 40, "direction": "OUTPUT", "label": "EXT_BK_SHDN", "description": "MCU Send HIGH to SHUTDOWN LTC4367 (Inverted via MOSFET)" },
+      "INTERNAL_BRAKE_SHUTDOWN": { "gpio": 29, "physical_pin": 41, "direction": "OUTPUT", "label": "INT_BK_SHDN", "description": "MCU Send HIGH to SHUTDOWN LTC4367 (Inverted via MOSFET)" }
+    },
+    "INDICATORS_FEEDBACK": {
+      "ALERT_LED": { "gpio": 4, "physical_pin": 6, "direction": "OUTPUT", "label": "ALERT_LED", "description": "System Status LED via N-MOSFET Gate" },
+      "BRAKE_3_STATUS_LED": { "gpio": 15, "physical_pin": 18, "direction": "OUTPUT", "label": "B3_LED", "description": "Brake 3 Status LED via N-MOSFET Gate" },
+      "BRAKE_1_2_STATUS_LED": { "gpio": 23, "physical_pin": 35, "direction": "OUTPUT", "label": "B12_LED", "description": "Brake 1&2 Status LED via N-MOSFET Gate" },
+      "FEEDBACK_SIGNAL": { "gpio": 21, "physical_pin": 32, "direction": "OUTPUT", "label": "SYS_FEEDBACK", "description": "Feedback to external system via Opto/N-MOSFET" }
+    },
+    "EXTERNAL_INPUTS": {
+      "COMBINED_INPUT_123": { "gpio": 26, "physical_pin": 38, "direction": "INPUT", "label": "SIGNAL_IN_123", "description": "Combined Signal Input from other systems" },
+      "EMERGENCY_INPUT_4": { "gpio": 27, "physical_pin": 39, "direction": "INPUT", "label": "SIGNAL_IN_4_EMG", "description": "Emergency Signal Input from other systems" }
+    },
+    "PROGRAMMING_DEBUG": {
+      "SWCLK": { "physical_pin": 24, "direction": "INPUT", "label": "SWCLK" },
+      "SWDIO": { "physical_pin": 25, "direction": "BIDIRECTIONAL", "label": "SWDIO" },
+      "USB_DP": { "physical_pin": 47, "status": "NOT CONNECTED" },
+      "USB_DN": { "physical_pin": 46, "status": "NOT CONNECTED" }
     }
   },
   "logic_levels": {

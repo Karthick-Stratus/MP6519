@@ -13,27 +13,38 @@ This repository contains the firmware for controlling a Brake Disk using the **M
   - **Hold Phase**: Automatically tuned to **15%** of the measured Peak Power.
   - **Long Run Mode**: Optional continuous testing loop with 1s cooldown between cycles.
 
-## Pin Configuration (RP2040 - 3 Channel Design)
+## Pin Configuration (RP2040 - Full Design)
 
-Detailed hardware pin mapping is available in the [hardware_pinout.json](hardware_pinout.json) file for AI-assisted programming.
+Detailed hardware pin mapping is available in the [hardware_pinout.json](hardware_pinout.json) file.
 
-### System Peripherals
-| Signal | GPIO | Physical Pin | Description |
-| :--- | :--- | :--- | :--- |
-| **UART0 TX** | 0 | 2 | Main Serial Output |
-| **UART0 RX** | 1 | 3 | Main Serial Input |
-| **I2C1 SDA** | 2 | 4 | Sensor Data Bus |
-| **I2C1 SCL** | 3 | 5 | Sensor Clock Bus |
-| **ALERT LED** | 4 | 6 | Status Indicator (via N-MOSFET) |
+### System & Power Protection
+| Signal | GPIO | Physical Pin | Direction | Description |
+| :--- | :--- | :--- | :--- | :--- |
+| **UART0 TX/RX** | 0 / 1 | 2 / 3 | OUT / IN | Debug Serial |
+| **I2C1 SDA/SCL** | 2 / 3 | 4 / 5 | BI / OUT | INA260 Bus |
+| **PWR_SYS_OK** | 17 | 28 | INPUT | HIGH = System Power OK |
+| **EXT_BK_FAULT** | 19 | 30 | INPUT | External Brake Fault (Inverted) |
+| **INT_BK_FAULT** | 22 | 34 | INPUT | Internal Brake Fault (Inverted) |
+| **EXT_BK_SHDN** | 28 | 40 | OUTPUT | External Brake Shutdown |
+| **INT_BK_SHDN** | 29 | 41 | OUTPUT | Internal Brake Shutdown |
 
-### Brake Channel Control
-| Channel | ENABLE (ENB) | FAULT (FT) | MODE |
-| :--- | :--- | :--- | :--- |
-| **Brake 1** | GPIO 5 (P7) | GPIO 8 (P11) | GPIO 11 (P14) |
-| **Brake 2** | GPIO 6 (P8) | GPIO 9 (P12) | GPIO 12 (P15) |
-| **Brake 3** | GPIO 7 (P9) | GPIO 10 (P13) | GPIO 13 (P16) |
+### Brake Channel Mapping
+| Channel | ENABLE (OUT) | PWM (OUT) | FAULT (IN) | MODE (OUT) | ALERT (IN) |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Brake 1** | GPIO 5 (P7) | GPIO 16 (P27) | GPIO 8 (P11) | GPIO 11 (P14) | GPIO 14 (P17) |
+| **Brake 2** | GPIO 6 (P8) | GPIO 18 (P29) | GPIO 9 (P12) | GPIO 12 (P15) | GPIO 24 (P36) |
+| **Brake 3** | GPIO 7 (P9) | GPIO 20 (P31) | GPIO 10 (P13) | GPIO 13 (P16) | GPIO 25 (P37) |
 
-*Note: ENABLE pins have 10K Pull-Downs. FAULT and MODE pins have 10K Pull-Ups to 3.3V.*
+### Indicators & External Signals
+| Signal | GPIO | Physical Pin | Direction | Description |
+| :--- | :--- | :--- | :--- | :--- |
+| **ALERT_LED** | 4 | 6 | OUTPUT | Main Status LED |
+| **B3_LED** | 15 | 18 | OUTPUT | Brake 3 Status LED |
+| **B12_LED** | 23 | 35 | OUTPUT | Brake 1&2 Status LED |
+| **FEEDBACK** | 21 | 32 | OUTPUT | Opto-Feedback Output |
+| **SIGNAL_IN_123**| 26 | 38 | INPUT | Combined External Input |
+| **SIGNAL_IN_EMG**| 27 | 39 | INPUT | Emergency Input (IN4) |
+
 
 
 
