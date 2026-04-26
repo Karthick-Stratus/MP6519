@@ -13,25 +13,28 @@ This repository contains the firmware for controlling a Brake Disk using the **M
   - **Hold Phase**: Automatically tuned to **15%** of the measured Peak Power.
   - **Long Run Mode**: Optional continuous testing loop with 1s cooldown between cycles.
 
-## Pin Configuration (Pico 2)
+## Pin Configuration (RP2040 - 3 Channel Design)
 
-Detailed hardware pin mapping is available in the [hardware_pinout.json](hardware_pinout.json) file for AI-assisted programming and automated integration.
+Detailed hardware pin mapping is available in the [hardware_pinout.json](hardware_pinout.json) file for AI-assisted programming.
 
-| Signal | Pin (GP) | Mode | Description |
+### System Peripherals
+| Signal | GPIO | Physical Pin | Description |
 | :--- | :--- | :--- | :--- |
-| **TX** | GP0 | UART | Serial1 TX (Telemetry Out) |
-| **RX** | GP1 | UART | Serial1 RX (Commands In) |
-| **STATUS_LED** | GP9 | OUTPUT | System Status Indicator |
-| **PWM** | GP10 | OUTPUT | MP6519 PWM Control |
-| **MODE** | GP11 | OUTPUT | MP6519 Mode Control |
-| **EN** | GP12 | OUTPUT | MP6519 Enable Control |
-| **FT** | GP13 | INPUT | MP6519 Fault Trigger (10K Pull-up) |
-| **SDA** | GP14 | I2C | INA260 I2C Data (10K Pull-up) |
-| **SCL** | GP15 | I2C | INA260 I2C Clock (10K Pull-up) |
-| **RESET_BTN** | GP16 | INPUT | Test Sequence Reset (Active Low) |
-| **SUCCESS** | GP17 | OUTPUT | Peak Detection Success Pulse |
-| **FAILURE** | GP18 | OUTPUT | Fault/Failure Trigger |
-| **ALERT** | GP19 | INPUT | INA260 Alert (18V UVP) |
+| **UART0 TX** | 0 | 2 | Main Serial Output |
+| **UART0 RX** | 1 | 3 | Main Serial Input |
+| **I2C1 SDA** | 2 | 4 | Sensor Data Bus |
+| **I2C1 SCL** | 3 | 5 | Sensor Clock Bus |
+| **ALERT LED** | 4 | 6 | Status Indicator (via N-MOSFET) |
+
+### Brake Channel Control
+| Channel | ENABLE (ENB) | FAULT (FT) | MODE |
+| :--- | :--- | :--- | :--- |
+| **Brake 1** | GPIO 5 (P7) | GPIO 8 (P11) | GPIO 11 (P14) |
+| **Brake 2** | GPIO 6 (P8) | GPIO 9 (P12) | GPIO 12 (P15) |
+| **Brake 3** | GPIO 7 (P9) | GPIO 10 (P13) | GPIO 13 (P16) |
+
+*Note: ENABLE pins have 10K Pull-Downs. FAULT and MODE pins have 10K Pull-Ups to 3.3V.*
+
 
 
 ---

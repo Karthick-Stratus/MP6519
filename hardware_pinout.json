@@ -1,53 +1,72 @@
 {
   "project": "MP6519 Brake Disk Control",
+  "version": "1.0.0",
+  "design_status": "Final Schematic Design",
   "hardware": {
-    "mcu": "Raspberry Pi Pico 2 (RP2350)",
-    "driver": "MP6519 (EV6519-Q-00A)",
-    "sensor": "INA260EVM Power Monitor"
+    "mcu": "RP2040",
+    "drivers": [
+      {
+        "id": 1,
+        "model": "MP6519GQ-Z",
+        "description": "Brake 1 Controller"
+      },
+      {
+        "id": 2,
+        "model": "MP6519GQ-Z",
+        "description": "Brake 2 Controller"
+      },
+      {
+        "id": 3,
+        "model": "MP6519GQ-Z",
+        "description": "Brake 3 Controller"
+      }
+    ]
   },
   "pin_mapping": {
     "UART": {
-      "TX": 0,
-      "RX": 1,
-      "peripheral": "Serial1",
-      "description": "Communication with Host PC via Debug Probe"
+      "peripheral": "UART0",
+      "description": "Main Serial Print / Debug",
+      "pins": {
+        "TX": { "gpio": 0, "physical_pin": 2, "label": "UART0-TX" },
+        "RX": { "gpio": 1, "physical_pin": 3, "label": "UART0-RX" }
+      }
     },
     "I2C": {
-      "SCL": 15,
-      "SDA": 14,
-      "peripheral": "Wire1",
-      "speed": "400kHz",
-      "devices": [
-        {
-          "name": "INA260",
-          "address": "0x40",
-          "description": "High-side current and voltage monitor"
-        }
-      ]
-    },
-    "MP6519_CONTROL": {
-      "EN": 12,
-      "MODE": 11,
-      "PWM": 10,
-      "FT": 13,
-      "description": "Control signals for MP6519 driver"
+      "peripheral": "I2C1",
+      "pins": {
+        "SDA": { "gpio": 2, "physical_pin": 4, "label": "I2C1-SDA" },
+        "SCL": { "gpio": 3, "physical_pin": 5, "label": "I2C1-SCL" }
+      }
     },
     "INDICATORS": {
-      "STATUS_LED": 9,
-      "SUCCESS_PULSE": 17,
-      "FAILURE_TRIGGER": 18
+      "ALERT_LED": {
+        "gpio": 4,
+        "physical_pin": 6,
+        "label": "ALERT",
+        "circuitry": "Connected to N-MOSFET Gate",
+        "description": "System Alert/Status LED"
+      }
     },
-    "INTERRUPTS_INPUTS": {
-      "RESET_BTN": 16,
-      "INA260_ALERT": 19
+    "BRAKE_CHANNELS": {
+      "BRAKE_1": {
+        "ENABLE": { "gpio": 5, "physical_pin": 7, "label": "B1_EN", "hardware_config": "10K Pull-Down", "connection": "ENB MP6519GQ-Z" },
+        "FAULT": { "gpio": 8, "physical_pin": 11, "label": "B1_FT", "hardware_config": "10K Pull-Up to 3.3V", "connection": "FT MP6519GQ-Z" },
+        "MODE": { "gpio": 11, "physical_pin": 14, "label": "B1_MODE", "hardware_config": "10K Pull-Up to 3.3V", "connection": "MODE MP6519GQ-Z" }
+      },
+      "BRAKE_2": {
+        "ENABLE": { "gpio": 6, "physical_pin": 8, "label": "B2_EN", "hardware_config": "10K Pull-Down", "connection": "ENB MP6519GQ-Z" },
+        "FAULT": { "gpio": 9, "physical_pin": 12, "label": "B2_FT", "hardware_config": "10K Pull-Up to 3.3V", "connection": "FT MP6519GQ-Z" },
+        "MODE": { "gpio": 12, "physical_pin": 15, "label": "B2_MODE", "hardware_config": "10K Pull-Up to 3.3V", "connection": "MODE MP6519GQ-Z" }
+      },
+      "BRAKE_3": {
+        "ENABLE": { "gpio": 7, "physical_pin": 9, "label": "B3_EN", "hardware_config": "10K Pull-Down", "connection": "ENB MP6519GQ-Z" },
+        "FAULT": { "gpio": 10, "physical_pin": 13, "label": "B3_FT", "hardware_config": "10K Pull-Up to 3.3V", "connection": "FT MP6519GQ-Z" },
+        "MODE": { "gpio": 13, "physical_pin": 16, "label": "B3_MODE", "hardware_config": "10K Pull-Up to 3.3V", "connection": "MODE MP6519GQ-Z" }
+      }
     }
   },
   "logic_levels": {
     "vcc": "3.3V",
     "io_standard": "LVCMOS"
-  },
-  "pwm_configuration": {
-    "frequency": 20000,
-    "resolution": 1024
   }
 }
