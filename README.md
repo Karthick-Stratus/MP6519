@@ -29,13 +29,18 @@ Detailed hardware pin mapping is available in the [hardware_pinout.json](hardwar
 | **INT_BK_SHDN** | 29 | 41 | OUTPUT | Internal Brake Shutdown |
 
 ### Brake Channel Mapping
-| Channel | ENABLE (OUT) | PWM (OUT) | FAULT (IN) | MODE (OUT) | ALERT (IN) |
+| Channel | ENABLE (OUT) | PWM (OUT) | FAULT (IN) | MODE (OUT) | INA260 ADDR |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Brake 1** | GPIO 5 (P7) | GPIO 16 (P27) | GPIO 8 (P11) | GPIO 11 (P14) | GPIO 14 (P17) |
-| **Brake 2** | GPIO 6 (P8) | GPIO 18 (P29) | GPIO 9 (P12) | GPIO 12 (P15) | GPIO 24 (P36) |
-| **Brake 3** | GPIO 7 (P9) | GPIO 20 (P31) | GPIO 10 (P13) | GPIO 13 (P16) | GPIO 25 (P37) |
+| **Brake 1** | GPIO 5 (P7) | GPIO 16 (P27) | GPIO 8 (P11) | GPIO 11 (P14) | **0x40** |
+| **Brake 2** | GPIO 6 (P8) | GPIO 18 (P29) | GPIO 9 (P12) | GPIO 12 (P15) | **0x41** |
+| **Brake 3** | GPIO 7 (P9) | GPIO 20 (P31) | GPIO 10 (P13) | GPIO 13 (P16) | **0x45** |
 
-### Indicators & External Signals
+### Signal Specifications
+- **PWM Frequency**: 20 kHz (All Channels)
+- **I2C Clock**: 400 kHz (Fast Mode)
+- **I2C Pull-Ups**: 4.7K to 3.3V
+- **Logic Level**: 3.3V LVCMOS
+
 | Signal | GPIO | Physical Pin | Direction | Description |
 | :--- | :--- | :--- | :--- | :--- |
 | **ALERT_LED** | 4 | 6 | OUTPUT | Main Status LED |

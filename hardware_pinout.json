@@ -1,12 +1,22 @@
 {
   "project": "MP6519 Brake Disk Control",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "design_status": "Final Schematic Design",
   "hardware": {
     "mcu": "RP2040",
     "peripheral_drivers": {
-      "motor_driver": "MP6519GQ-Z",
-      "power_monitor": "INA260AIPWR",
+      "motor_driver": {
+        "model": "MP6519GQ-Z",
+        "pwm_frequency_hz": 20000
+      },
+      "power_monitor": {
+        "model": "INA260AIPWR",
+        "i2c_addresses": {
+          "BRAKE_1": "0x40",
+          "BRAKE_2": "0x41",
+          "BRAKE_3": "0x45"
+        }
+      },
       "protection_controller": "LTC4367",
       "logic_gate": "SN74AHC1G32DBVR"
     }
@@ -22,6 +32,8 @@
     },
     "I2C": {
       "peripheral": "I2C1",
+      "clock_speed_hz": 400000,
+      "hardware_config": "4.7K Pull-Up to 3.3V",
       "pins": {
         "SDA": { "gpio": 2, "physical_pin": 4, "direction": "BIDIRECTIONAL", "label": "I2C1-SDA" },
         "SCL": { "gpio": 3, "physical_pin": 5, "direction": "OUTPUT", "label": "I2C1-SCL" }
@@ -30,24 +42,24 @@
     "BRAKE_CHANNELS": {
       "BRAKE_1": {
         "ENABLE": { "gpio": 5, "physical_pin": 7, "direction": "OUTPUT", "label": "B1_EN", "hardware_config": "10K Pull-Down", "connection": "ENB MP6519GQ-Z" },
-        "PWM": { "gpio": 16, "physical_pin": 27, "direction": "OUTPUT", "label": "B1_PWM", "hardware_config": "10K Pull-Down to GND", "connection": "PWM MP6519GQ-Z" },
+        "PWM": { "gpio": 16, "physical_pin": 27, "direction": "OUTPUT", "label": "B1_PWM", "hardware_config": "10K Pull-Down to GND", "frequency_hz": 20000, "connection": "PWM MP6519GQ-Z" },
         "FAULT": { "gpio": 8, "physical_pin": 11, "direction": "INPUT", "label": "B1_FT", "hardware_config": "10K Pull-Up to 3.3V", "connection": "FT MP6519GQ-Z" },
         "MODE": { "gpio": 11, "physical_pin": 14, "direction": "OUTPUT", "label": "B1_MODE", "hardware_config": "10K Pull-Up to 3.3V", "connection": "MODE MP6519GQ-Z" },
-        "ALERT": { "gpio": 14, "physical_pin": 17, "direction": "INPUT", "label": "B1_ALERT", "hardware_config": "10K Pull-Up to 3.3V", "connection": "ALERT INA260AIPWR" }
+        "ALERT": { "gpio": 14, "physical_pin": 17, "direction": "INPUT", "label": "B1_ALERT", "hardware_config": "10K Pull-Up to 3.3V", "i2c_address": "0x40", "connection": "ALERT INA260AIPWR" }
       },
       "BRAKE_2": {
         "ENABLE": { "gpio": 6, "physical_pin": 8, "direction": "OUTPUT", "label": "B2_EN", "hardware_config": "10K Pull-Down", "connection": "ENB MP6519GQ-Z" },
-        "PWM": { "gpio": 18, "physical_pin": 29, "direction": "OUTPUT", "label": "B2_PWM", "hardware_config": "10K Pull-Down to GND", "connection": "PWM MP6519GQ-Z" },
+        "PWM": { "gpio": 18, "physical_pin": 29, "direction": "OUTPUT", "label": "B2_PWM", "hardware_config": "10K Pull-Down to GND", "frequency_hz": 20000, "connection": "PWM MP6519GQ-Z" },
         "FAULT": { "gpio": 9, "physical_pin": 12, "direction": "INPUT", "label": "B2_FT", "hardware_config": "10K Pull-Up to 3.3V", "connection": "FT MP6519GQ-Z" },
         "MODE": { "gpio": 12, "physical_pin": 15, "direction": "OUTPUT", "label": "B2_MODE", "hardware_config": "10K Pull-Up to 3.3V", "connection": "MODE MP6519GQ-Z" },
-        "ALERT": { "gpio": 24, "physical_pin": 36, "direction": "INPUT", "label": "B2_ALERT", "hardware_config": "10K Pull-Up to 3.3V", "connection": "ALERT INA260AIPWR" }
+        "ALERT": { "gpio": 24, "physical_pin": 36, "direction": "INPUT", "label": "B2_ALERT", "hardware_config": "10K Pull-Up to 3.3V", "i2c_address": "0x41", "connection": "ALERT INA260AIPWR" }
       },
       "BRAKE_3": {
         "ENABLE": { "gpio": 7, "physical_pin": 9, "direction": "OUTPUT", "label": "B3_EN", "hardware_config": "10K Pull-Down", "connection": "ENB MP6519GQ-Z" },
-        "PWM": { "gpio": 20, "physical_pin": 31, "direction": "OUTPUT", "label": "B3_PWM", "hardware_config": "10K Pull-Down to GND", "connection": "PWM MP6519GQ-Z" },
+        "PWM": { "gpio": 20, "physical_pin": 31, "direction": "OUTPUT", "label": "B3_PWM", "hardware_config": "10K Pull-Down to GND", "frequency_hz": 20000, "connection": "PWM MP6519GQ-Z" },
         "FAULT": { "gpio": 10, "physical_pin": 13, "direction": "INPUT", "label": "B3_FT", "hardware_config": "10K Pull-Up to 3.3V", "connection": "FT MP6519GQ-Z" },
         "MODE": { "gpio": 13, "physical_pin": 16, "direction": "OUTPUT", "label": "B3_MODE", "hardware_config": "10K Pull-Up to 3.3V", "connection": "MODE MP6519GQ-Z" },
-        "ALERT": { "gpio": 25, "physical_pin": 37, "direction": "INPUT", "label": "B3_ALERT", "hardware_config": "10K Pull-Up to 3.3V", "connection": "ALERT INA260AIPWR" }
+        "ALERT": { "gpio": 25, "physical_pin": 37, "direction": "INPUT", "label": "B3_ALERT", "hardware_config": "10K Pull-Up to 3.3V", "i2c_address": "0x45", "connection": "ALERT INA260AIPWR" }
       }
     },
     "POWER_PROTECTION": {
