@@ -8,10 +8,19 @@ This repository contains the firmware for controlling a Brake Disk using the **M
 - **Motor Driver**: MP6519 (EV6519-Q-00A)
 - **Power Sensor**: INA260 (I2C)
 - **Operating Voltage**: 24VDC
-- **Brake Logic**:
-  - **PEAK Phase**: 100% Duty Cycle for 3 Seconds.
-  - **Hold Phase**: Automatically tuned to **15%** of the measured Peak Power.
-  - **Long Run Mode**: Optional continuous testing loop with 1s cooldown between cycles.
+## System Intelligence
+
+This project uses a structured data-driven approach to hardware and logic definition:
+- **[hardware_pinout.json](hardware_pinout.json)**: Complete physical and electrical mapping.
+- **[FIRMWARE_LOGIC.json](FIRMWARE_LOGIC.json)**: High-level state machine and control loop specification for AI-assisted code generation.
+
+### Control Logic Summary
+The firmware implements an **Event-Driven State Machine** with closed-loop power management:
+1. **Trigger**: Monitors `COMBINED_INPUT` and `EMERGENCY_INPUT`.
+2. **Peak Phase**: Applies 100% duty for 3s to measure maximum wattage.
+3. **Hold Phase**: Automatically scales power to **15%** of peak using real-time INA260 telemetry.
+4. **Safety**: Integrated hardware fault detection (MP6519 FT) and software watchdog monitoring.
+
 
 ## Pin Configuration (RP2040 - Full Design)
 

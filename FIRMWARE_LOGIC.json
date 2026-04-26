@@ -1,0 +1,85 @@
+{
+  "project": "MP6519 Brake Disk Control",
+  "logic_version": "1.0.0",
+  "architecture": "Event-Driven State Machine (Non-Blocking)",
+  "global_parameters": {
+    "pwm_frequency_hz": 20000,
+    "i2c_clock_hz": 400000,
+    "telemetry_rate_hz": 10,
+    "control_loop_rate_hz": 100
+  },
+  "control_channels": [
+    {
+      "id": "BRAKE_3",
+      "trigger_signal": { "gpio": 26, "label": "COMBINED_INPUT", "active": "HIGH" },
+      "hardware": { "driver": "MP6519 (CH3)", "sensor": "INA260 (0x45)" }
+    },
+    {
+      "id": "BRAKE_1_2",
+      "trigger_signal": { "gpio": 27, "label": "EMERGENCY_INPUT", "active": "HIGH" },
+      "hardware": { "drivers": ["MP6519 (CH1)", "MP6519 (CH2)"], "sensors": ["INA260 (0x40)", "INA260 (0x41)"] }
+    }
+  ],
+  "states": {
+    "STATE_IDLE": {
+      "description": "Waiting for trigger signal.",
+      "outputs": { "PWM": 0, "ENABLE": "LOW" },
+      "transitions": {
+        "TRIGGER_ACTIVE": "STATE_PEAK_START"
+      }
+    },
+    "STATE_PEAK_START": {
+      "description": "Initial power application sequence.",
+      "actions": [
+        "Set PWM to 100% duty cycle",
+        "Wait 2ms (Stabilize)",
+        "Set ENABLE to HIGH"
+      ],
+      "next_state": "STATE_PEAK_MONITOR"
+    },
+    "STATE_PEAK_MONITOR": {
+      "description": "Measuring max power consumption (Peak Phase).",
+      "duration_ms": 3000,
+      "process": "Continuously read V and I from INA260. Record maximum Watts (W_peak).",
+      "transitions": {
+        "TIMER_EXPIRED": "STATE_HOLD_TRANSITION",
+        "FAULT_DETECTED": "STATE_FAULT_HALT"
+      }
+    },
+    "STATE_HOLD_TRANSITION": {
+      "description": "Calculating target maintenance power.",
+      "actions": [
+        "W_target = W_peak * 0.15",
+        "Initiate ramp-down or jump to HOLD"
+      ],
+      "next_state": "STATE_HOLD_MAINTAIN"
+    },
+    "STATE_HOLD_MAINTAIN": {
+      "description": "Closed-loop maintenance of target power.",
+      "algorithm": "Proportional Control (P-Loop)",
+      "target": "W_target",
+      "process": "Adjust PWM duty cycle dynamically based on real-time INA260 wattage reading to maintain W_target.",
+      "transitions": {
+        "TRIGGER_DEACTIVATED": "STATE_IDLE",
+        "FAULT_DETECTED": "STATE_FAULT_HALT"
+      }
+    },
+    "STATE_FAULT_HALT": {
+      "description": "Safety shutdown state.",
+      "outputs": { "PWM": 0, "ENABLE": "LOW" },
+      "actions": [
+        "Assert FAILURE_TRIGGER (GPIO 18)",
+        "Log fault type to Serial"
+      ],
+      "transitions": {
+        "RESET_SIGNAL": "STATE_IDLE"
+      }
+    }
+  },
+  "robustness_requirements": {
+    "watchdog": "Enable hardware watchdog timer (WDT).",
+    "i2c_recovery": "Detect bus hangs and perform soft-reset of I2C peripheral.",
+    "thermal_protection": "Monitor FT (Fault) pins; if LOW, enter STATE_FAULT_HALT immediately.",
+    "input_debouncing": "Apply 50ms software debounce to trigger signals to prevent oscillation."
+  }
+}
