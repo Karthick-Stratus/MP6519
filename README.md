@@ -1,6 +1,11 @@
-# MP6519 Brake Control System (RP2350)
+# MP6519 Brake Control System (Production Release)
 
-This repository contains the firmware for controlling a Brake Disk using the **MP6519** motor driver and monitoring power telemetry via an **INA260** sensor on the **Raspberry Pi Pico 2 (RP2350)**.
+![Release](https://img.shields.io/badge/Release-v1.2.0--Production-brightgreen)
+![Platform](https://img.shields.io/badge/Platform-RP2040-blue)
+![Architecture](https://img.shields.io/badge/Architecture-3--Channel--Closed--Loop-orange)
+
+This repository contains the production-grade firmware specification and hardware mapping for the **MP6519 Brake Disk Control System**. Designed for high-reliability industrial automation, this system features 3-channel independent control, real-time power monitoring via INA260, and closed-loop maintenance logic.
+
 
 ## Project Specifications
 
